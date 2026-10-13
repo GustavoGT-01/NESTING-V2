@@ -138,6 +138,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(store.load_project(path.rsplit("/", 1)[1]))
             except store.BadId as exc:
                 return self._fail(400, str(exc))
+        elif path.startswith("/api/nest/poll/"):
+            job = engine.get(path.rsplit("/", 1)[1])
+            if job is None:
+                return self._fail(404, "Encaixe não encontrado (o servidor foi reiniciado?).")
+            query = self.path.partition("?")[2]
+            rev = next((v for k, _, v in (p.partition("=") for p in query.split("&")) if k == "rev"), "")
+            return self._json(job.status(int(rev) if rev.lstrip("-").isdigit() else -1))
         elif path.startswith("/data") or path.endswith((".py", ".bak", ".tmp")):
             return self.send_error(404)  # dados e código não são servidos pela página
         return super().do_GET()
@@ -169,6 +176,21 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self._fail(400, "Falha no encaixe: %s" % exc)
                 return
+        elif path == "/api/nest/start":
+            # encaixe como tarefa: a página acompanha a prévia por /api/nest/poll/<id>
+            try:
+                self._json({"id": engine.start(json.loads(data.decode("utf-8")), POOL, WORKERS).id})
+            except Exception as exc:
+                self._fail(400, "Falha no encaixe: %s" % exc)
+            return
+        elif path.startswith("/api/nest/stop/"):
+            job = engine.get(path.rsplit("/", 1)[1])
+            if job is None:
+                self._fail(404, "Encaixe não encontrado.")
+            else:
+                job.stop()
+                self._json({"ok": True})
+            return
         elif path == "/api/store":
             try:
                 body = json.loads(data.decode("utf-8"))
@@ -222,6 +244,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(raw)
 
     def log_message(self, fmt, *args):
+        if "/api/nest/poll/" in self.path:
+            return  # consulta repetida a cada meio segundo: não polui o registro
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))
 
 

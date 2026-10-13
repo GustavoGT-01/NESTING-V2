@@ -11,7 +11,16 @@ mod json;
 use json::J;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// Ligado quando o usuário pede para parar: as buscas terminam e fica o melhor até ali.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+fn stopped() -> bool {
+    STOP.load(Ordering::Relaxed)
+}
 
 type Pt = (f64, f64);
 type Ring = Vec<Pt>;
@@ -787,6 +796,82 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
     Res { sheets: sheets.into_iter().map(|s| SheetOut { placed: s.placed, extent: s.extent }).collect(), fail, why }
 }
 
+// ---------- melhor solução do grupo (compartilhada entre os núcleos) ----------
+
+type BestKey = (usize, usize, i64);
+
+struct Snapshot {
+    sheets: Vec<Vec<Placed>>,
+    fail: Vec<usize>,
+    why: Vec<&'static str>,
+    extent: Vec<i64>,
+}
+
+struct SharedState {
+    best: Option<(BestKey, Snapshot)>,
+    sent: Option<Instant>,
+    pending: bool,
+}
+
+/// Todo núcleo oferece aqui cada solução melhor que acha. O resultado final do grupo é
+/// o melhor de todos, e é daqui que sai a prévia mostrada na tela durante o cálculo.
+struct Shared<'a> {
+    key: &'a str,
+    ids: &'a [String],
+    mar: f64,
+    t0: Instant,
+    emit: bool,
+    state: Mutex<SharedState>,
+}
+
+impl<'a> Shared<'a> {
+    fn new(key: &'a str, ids: &'a [String], mar: f64, emit: bool) -> Shared<'a> {
+        Shared { key, ids, mar, t0: Instant::now(), emit, state: Mutex::new(SharedState { best: None, sent: None, pending: false }) }
+    }
+
+    fn offer(&self, res: &Res, cs: f64) {
+        let extent: Vec<i64> = res.sheets.iter().map(|s| (self.mar + s.extent as f64 * cs).round_ties_even() as i64).collect();
+        let key: BestKey = (res.fail.len(), res.sheets.len(), extent.last().copied().unwrap_or(0));
+        let mut st = self.state.lock().unwrap();
+        if st.best.as_ref().map_or(true, |b| key < b.0) {
+            let snap = Snapshot { sheets: res.sheets.iter().map(|s| s.placed.clone()).collect(), fail: res.fail.clone(), why: res.why.clone(), extent };
+            st.best = Some((key, snap));
+            st.pending = true;
+            self.flush(&mut st);
+        }
+    }
+
+    /// Manda a prévia pendente, no máximo uma a cada 300 ms.
+    fn tick(&self) {
+        if self.emit {
+            let mut st = self.state.lock().unwrap();
+            self.flush(&mut st);
+        }
+    }
+
+    fn flush(&self, st: &mut SharedState) {
+        if !self.emit || !st.pending || st.sent.map_or(false, |t| t.elapsed() < Duration::from_millis(300)) {
+            return;
+        }
+        if let Some((_, snap)) = &st.best {
+            let line = format!("{{\"progress\":{{\"key\":{},\"t\":{:.1},{}}}}}\n", json::quote(self.key), self.t0.elapsed().as_secs_f64(), snap_json(self.ids, snap));
+            let mut so = std::io::stdout().lock();
+            let _ = so.write_all(line.as_bytes());
+            let _ = so.flush();
+        }
+        st.sent = Some(Instant::now());
+        st.pending = false;
+    }
+}
+
+fn snap_json(ids: &[String], b: &Snapshot) -> String {
+    let sheets: Vec<String> = b.sheets.iter().map(|s| placed_json(ids, s)).collect();
+    let fail: Vec<String> = b.fail.iter().map(|&u| ids[u].clone()).collect();
+    let why: Vec<String> = b.why.iter().map(|w| json::quote(w)).collect();
+    let ext: Vec<String> = b.extent.iter().map(|e| e.to_string()).collect();
+    format!("\"sheets\":[{}],\"fail\":[{}],\"fail_why\":[{}],\"extent\":[{}]", sheets.join(","), fail.join(","), why.join(","), ext.join(","))
+}
+
 // ---------- busca ----------
 
 struct Rng(u64);
@@ -819,9 +904,9 @@ struct Best {
 
 /// Busca local sobre ordem + gene de diversificação.
 #[allow(clippy::too_many_arguments)]
-fn search(items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &Opt, seconds: f64, rnd: &mut Rng, known: Option<Best>, cache: &mut Cache) -> (Best, u64) {
+fn search(items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &Opt, seconds: f64, rnd: &mut Rng, known: Option<Best>, cache: &mut Cache, shared: &Shared) -> (Best, u64) {
     let t0 = Instant::now();
-    let over = |t: &Instant| t.elapsed().as_secs_f64() > seconds;
+    let over = |t: &Instant| stopped() || t.elapsed().as_secs_f64() > seconds;
     let mut best = known;
     if best.is_none() {
         let boxes: Vec<(f64, f64)> = items
@@ -848,6 +933,7 @@ fn search(items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &Opt, seconds: 
             let res = pack(&o, items, fine, g, opt, cache);
             let sc = score(&res);
             if best.as_ref().map_or(true, |b| sc < b.sc) {
+                shared.offer(&res, opt.cs);
                 best = Some(Best { order: o, res, sc });
             }
             if over(&t0) {
@@ -877,18 +963,14 @@ fn search(items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &Opt, seconds: 
         let sc = score(&res);
         iters += 1;
         if sc <= best.sc {
+            if sc < best.sc {
+                shared.offer(&res, opt.cs);
+            }
             best = Best { order: o, res, sc };
         }
+        shared.tick();
     }
     (best, iters)
-}
-
-struct GroupOut {
-    sheets: Vec<Vec<Placed>>,
-    fail: Vec<usize>,
-    why: Vec<&'static str>,
-    iters: u64,
-    extent: Vec<i64>,
 }
 
 struct Base<'a> {
@@ -900,7 +982,7 @@ struct Base<'a> {
 
 /// Etapa 1 (grossa): grade de 4 mm, muitos ângulos, acha ordem e giro.
 /// Etapa 2 (fina): grade pedida, ângulos refinados ao redor dos escolhidos.
-fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u64, boxed: bool) -> GroupOut {
+fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u64, boxed: bool, shared: &Shared) -> u64 {
     let mut rnd = Rng::new(seed);
     let t0 = Instant::now();
     let (gap, mar, cs) = (base.gap, base.mar, base.cs);
@@ -910,7 +992,7 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
     let none: Vec<Vec<f64>> = vec![Vec::new(); items.len()];
     let (r1, rb1) = radii(gap, cs1);
     let o1 = Opt { cs: cs1, mar, r: r1, rb: rb1, boxed, rules: base.rules };
-    let (b1, it1) = search(items, &none, g, &o1, t1, &mut rnd, None, &mut Cache::default());
+    let (b1, it1) = search(items, &none, g, &o1, t1, &mut rnd, None, &mut Cache::default(), shared);
     // etapa 2: refina ângulos ao redor do escolhido por peça
     let mut chosen: Vec<Option<f64>> = vec![None; items.len()];
     for sh in &b1.res.sheets {
@@ -939,31 +1021,26 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
     let tp0 = Instant::now();
     let r1 = pack(&order, items, &fine, g, &o2, &mut cache2);
     let tp = tp0.elapsed().as_secs_f64(); // custo de uma tentativa na grade fina
+    shared.offer(&r1, cs);
     let mut best = Best { sc: score(&r1), order, res: r1 };
     // O prazo vale: só gasta outra tentativa na grade fina se ainda couber no tempo pedido.
-    if t0.elapsed().as_secs_f64() + tp < seconds {
+    if !stopped() && t0.elapsed().as_secs_f64() + tp < seconds {
         let mut idx: Vec<usize> = (0..items.len()).collect();
         idx.sort_by(|&a, &b| (-items[a].area).partial_cmp(&-items[b].area).unwrap());
         let plain: Vec<Ent> = idx.into_iter().map(|uid| Ent { uid, gene: 0, fine: false }).collect();
         let r2 = pack(&plain, items, &fine, g, &o2, &mut cache2);
+        shared.offer(&r2, cs);
         if score(&r2) < best.sc {
             best = Best { sc: score(&r2), order: plain, res: r2 };
         }
     }
     let mut it2 = 0;
     let left = seconds - t0.elapsed().as_secs_f64();
-    if left > tp {
-        let (b2, n) = search(items, &fine, g, &o2, left - tp, &mut rnd, Some(best), &mut cache2);
-        best = b2;
+    if !stopped() && left > tp {
+        let (_, n) = search(items, &fine, g, &o2, left - tp, &mut rnd, Some(best), &mut cache2, shared);
         it2 = n;
     }
-    GroupOut {
-        extent: best.res.sheets.iter().map(|s| (mar + s.extent as f64 * cs).round_ties_even() as i64).collect(),
-        sheets: best.res.sheets.into_iter().map(|s| s.placed).collect(),
-        fail: best.res.fail,
-        why: best.res.why,
-        iters: it1 + it2,
-    }
+    it1 + it2
 }
 
 // ---------- entrada e saída ----------
@@ -1103,48 +1180,49 @@ fn run(text: &str) -> Result<String, String> {
         return Ok(format!("{{\"sheets\":[{}],\"fail\":[{}]}}", sheets.join(","), fail.join(",")));
     }
 
+    let emit = p.get("progress").map_or(false, J::truthy);
+    // Parada pedida pelo servidor: ele cria este arquivo e o motor fecha com o melhor até ali.
+    if let Some(J::Str(path)) = p.get("stop_file") {
+        let path = path.clone();
+        std::thread::spawn(move || loop {
+            if std::path::Path::new(&path).exists() {
+                STOP.store(true, Ordering::Relaxed);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        });
+    }
     let weight: Vec<f64> = groups.iter().map(|g| g.items.iter().map(|i| i.area).sum::<f64>().max(1.0)).collect();
     let wsum: f64 = weight.iter().sum();
     let mut out: Vec<String> = Vec::new();
     for (g, wgt) in groups.iter().zip(&weight) {
-        let secs = (total * wgt / wsum).max(1.0);
+        // depois de uma parada, os grupos que faltam recebem só o mínimo: uma passada
+        let secs = if stopped() { 0.0 } else { (total * wgt / wsum).max(1.0) };
         let dims = (g.w, g.h);
-        // metade dos núcleos com cada critério de posição; fica a melhor solução
-        let mut res: Vec<GroupOut> = if workers < 2 {
-            vec![nest_group(dims, &g.items, &base, secs / 2.0, 1, false), nest_group(dims, &g.items, &base, secs / 2.0, 1, true)]
+        let shared = Shared::new(&g.key, &g.ids, mar, emit);
+        // metade dos núcleos com cada critério de posição; fica a melhor solução de todos
+        let iters: u64 = if workers < 2 {
+            nest_group(dims, &g.items, &base, secs / 2.0, 1, false, &shared) + nest_group(dims, &g.items, &base, secs / 2.0, 1, true, &shared)
         } else {
             std::thread::scope(|s| {
                 let hs: Vec<_> = (0..workers)
                     .map(|n| {
-                        let (items, base) = (&g.items, &base);
-                        s.spawn(move || nest_group(dims, items, base, secs, 1 + 97 * n as u64, n % 2 == 1))
+                        let (items, base, shared) = (&g.items, &base, &shared);
+                        s.spawn(move || nest_group(dims, items, base, secs, 1 + 97 * n as u64, n % 2 == 1, shared))
                     })
                     .collect();
-                hs.into_iter().map(|h| h.join().expect("falha em um núcleo do encaixe")).collect()
+                hs.into_iter().map(|h| h.join().expect("falha em um núcleo do encaixe")).sum()
             })
         };
-        let iters: u64 = res.iter().map(|r| r.iters).sum();
-        let mut bi = 0;
-        for i in 1..res.len() {
-            let key = |r: &GroupOut| (r.fail.len(), r.sheets.len(), r.extent.last().copied().unwrap_or(0));
-            if key(&res[i]) < key(&res[bi]) {
-                bi = i;
-            }
-        }
-        let b = res.swap_remove(bi);
-        let sheets: Vec<String> = b.sheets.iter().map(|s| placed_json(&g.ids, s)).collect();
-        let fail: Vec<String> = b.fail.iter().map(|&u| g.ids[u].clone()).collect();
-        let why: Vec<String> = b.why.iter().map(|w| json::quote(w)).collect();
-        let ext: Vec<String> = b.extent.iter().map(|e| e.to_string()).collect();
+        let st = shared.state.lock().unwrap();
+        let (_, b) = st.best.as_ref().ok_or("grupo sem solução")?;
         out.push(format!(
-            "{}:{{\"sheets\":[{}],\"fail\":[{}],\"fail_why\":[{}],\"iters\":{},\"extent\":[{}],\"workers\":{},\"engine\":\"rust\"}}",
+            "{}:{{{},\"iters\":{},\"workers\":{},\"engine\":\"rust\",\"stopped\":{}}}",
             json::quote(&g.key),
-            sheets.join(","),
-            fail.join(","),
-            why.join(","),
+            snap_json(&g.ids, b),
             iters,
-            ext.join(","),
-            if workers < 2 { 1 } else { workers }
+            if workers < 2 { 1 } else { workers },
+            stopped()
         ));
     }
     Ok(format!("{{{}}}", out.join(",")))
@@ -1158,8 +1236,9 @@ fn main() {
     }
     match run(&text) {
         Ok(o) => {
-            let mut so = std::io::stdout();
+            let mut so = std::io::stdout().lock();
             let _ = so.write_all(o.as_bytes());
+            let _ = so.write_all(b"\n");
             let _ = so.flush();
         }
         Err(e) => {

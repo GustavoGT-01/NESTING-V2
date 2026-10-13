@@ -12,6 +12,7 @@ Roda no seu computador, sem instalar bibliotecas: o servidor usa só a bibliotec
 - **Modelos e cores.** A cor identifica o modelo da peça. O modelo pode ser criado antes da importação e tem uma quantidade por projeto (ex.: 5 unidades do mesmo modelo).
 - **Regras de chapa.** Modelos em chapas separadas, modelos que devem ficar na mesma chapa e pares que não podem se misturar.
 - **Encaixe** com rotação livre ou em passos, espelhamento por peça e preenchimento de furos, calculado no servidor em vários núcleos ou no navegador.
+- **Tempo de otimização à escolha**, de 10 segundos a 2 horas, com prévia do encaixe em tempo real, barra de progresso e botão para parar antes e ficar com o melhor até ali.
 - **Exportação** em EPS, DXF, DWG e SVG, mais relatório em PDF.
 - **EPS conferido.** O arquivo só é baixado se a releitura bater com o desenho (medida da chapa, número de contornos e desvio de até 0,01 mm).
 - **Histórico** de importações, alterações e exportações.

@@ -65,6 +65,8 @@ input[type=color]{width:30px;height:26px;padding:2px;flex:0 0 auto}
 .empty{min-height:50vh;display:block;align-content:center;color:var(--mu);text-align:center;padding:30px;line-height:1.7}
 .grp,.setcard,.preset-item{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:8px}
 .grp,.setcard{display:flex;flex-direction:column;gap:6px;min-width:0}.setcard .m,.grp .t,.msg,.pair{overflow-wrap:anywhere}
+.prog{display:flex;flex-direction:column;gap:6px}.prog[hidden]{display:none}
+.pbar{height:6px;background:var(--ln);border-radius:3px;overflow:hidden}.pbar i{display:block;height:100%;width:0;background:var(--ac);transition:width .5s linear}
 #go{position:sticky;bottom:8px;z-index:5;box-shadow:0 0 0 8px var(--p2)}
 .grp .t,.setcard .top{font-weight:600}.grp .t span,.setcard .m{font:11px var(--mono);color:var(--mu);font-weight:400}
 .grp .row3{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:end}
@@ -180,10 +182,13 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
     <details><summary class="sub" style="cursor:pointer">Opções avançadas</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
       <div class="row">
         <label class="f">Resolução (mm)<select id="res"><option value="1">1 · máximo</option><option value="2" selected>2 · preciso</option><option value="3">3 · equilibrado</option><option value="5">5 · rápido</option></select></label>
-        <label class="f">Otimizar por<select id="secs"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="90">1,5 min</option><option value="240">4 min</option></select></label>
+        <label class="f">Tempo de otimização<select id="secsPick"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option><option value="600">10 min</option><option value="1200">20 min</option><option value="1800">30 min</option><option value="">Outro…</option></select><input type="hidden" id="secs" value="30"></label>
       </div>
+      <label class="f" id="secsBox" hidden>Tempo em minutos<input id="secsMin" type="number" min="0.1" max="120" step="0.5" value="45"></label>
+      <div class="msg">Mais tempo testa mais arranjos e costuma economizar chapa. Dá para parar antes e ficar com o melhor até ali.</div>
       <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (Rust, melhor aproveitamento)</label>
       <label class="f chk"><input type="checkbox" id="fill" checked> Encaixar peças dentro dos furos das maiores</label></div></details>
+    <div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div>
     <button class="pri" id="go" type="button" disabled>Encaixar</button>
     <div class="msg" id="nmsg"></div>
     <div class="btns"><button type="button" id="nestSave" disabled>Salvar encaixe</button><button type="button" id="nestOpen" disabled>Abrir salvo</button></div>
@@ -504,16 +509,50 @@ function nestGroup(g,items,o,order){
   }
   return{sheets,fail,failWhy}}
 const used=g=>g.sheets.reduce((s,sh)=>s+sh.placed.reduce((q,p)=>q+p.it.A,0),0);
-async function serverNest(o){
-  const G=groupsOf(),groups={},byId={};
-  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
-  const r=await sfetch('/api/nest',{method:'POST',body:JSON.stringify({...o,seconds:+$('#secs').value,groups})});
-  if(!r.ok)throw Error(await r.text());const R=await r.json(),out={};
+/* ---------- tempo de otimização ---------- */
+const fmtSecs=v=>v<90?Math.round(v)+' s':(Math.round(v/6)/10).toLocaleString('pt-BR')+' min';
+function setSecs(v,quiet){
+  v=Math.max(5,Math.min(7200,Math.round(+v)||30));
+  const pick=$('#secsPick'),known=[...pick.options].some(o=>o.value===String(v));
+  pick.value=known?String(v):'';$('#secsBox').hidden=known;if(!known)$('#secsMin').value=Math.round(v/6)/10;
+  if($('#secs').value!==String(v)){$('#secs').value=String(v);if(!quiet)$('#secs').dispatchEvent(new Event('change'))}
+}
+$('#secsPick').onchange=e=>{if(e.target.value)setSecs(e.target.value);else{$('#secsBox').hidden=false;setSecs((+$('#secsMin').value||45)*60);$('#secsBox').hidden=false;$('#secsPick').value='';$('#secsMin').focus()}};
+$('#secsMin').addEventListener('change',e=>{const v=Math.max(5,Math.min(7200,Math.round((+e.target.value||1)*60)));$('#secs').value=String(v);$('#secs').dispatchEvent(new Event('change'))});
+
+/* ---------- encaixe no servidor: tarefa com prévia, barra de progresso e parada ---------- */
+let JOB=null;
+function decodeNest(R,byId){const out={};
   for(const k in R){
     const why=Array.isArray(R[k].fail_why)&&R[k].fail_why.length===R[k].fail.length?R[k].fail_why:R[k].fail.map(()=>'tamanho');
-    out[k]={fail:R[k].fail.map(i=>byId[i]),failWhy:why,sheets:R[k].sheets.map(sh=>({placed:sh.map(p=>{const it=byId[p.id],t=tf(it.rings,p.a,p.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:p.x,y:p.y,a:p.a,mi:p.mi}})})),ext:R[k].extent,workers:R[k].workers,iters:R[k].iters,engine:R[k].engine};
+    out[k]={fail:R[k].fail.map(i=>byId[i]),failWhy:why,sheets:R[k].sheets.map(sh=>({placed:sh.map(p=>{const it=byId[p.id],t=tf(it.rings,p.a,p.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:p.x,y:p.y,a:p.a,mi:p.mi}})})),ext:R[k].extent,workers:R[k].workers,iters:R[k].iters,engine:R[k].engine,stopped:!!R[k].stopped};
   }
   return out}
+function progShow(elapsed,total,text){$('#prog').hidden=false;$('#progBar').style.width=Math.max(0,Math.min(100,total?elapsed/total*100:0))+'%';$('#progTxt').textContent=text}
+function progHide(){$('#prog').hidden=true;$('#progBar').style.width='0';$('#stopNest').disabled=false;$('#stopNest').textContent='Parar e ficar com o melhor até agora'}
+$('#stopNest').onclick=async()=>{if(!JOB||JOB.stopping)return;JOB.stopping=true;$('#stopNest').disabled=true;$('#stopNest').textContent='Parando…';
+  try{await sfetch('/api/nest/stop/'+JOB.id,{method:'POST',body:'{}'})}catch(e){toast(e.message,'bad')}};
+async function serverNest(o){
+  const G=groupsOf(),groups={},byId={},secs=+$('#secs').value,nGroups=Object.keys(G).length;
+  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
+  const r=await sfetch('/api/nest/start',{method:'POST',body:JSON.stringify({...o,seconds:secs,groups})});
+  if(!r.ok)throw Error(await r.text());
+  const id=(await r.json()).id;JOB={id,stopping:false};let rev=-1,seen=0,note='';
+  progShow(0,secs,'Começando…');
+  try{for(;;){
+    await new Promise(z=>setTimeout(z,500));
+    const q=await sfetch('/api/nest/poll/'+id+'?rev='+rev);if(!q.ok)throw Error(await q.text());
+    const st=await q.json();
+    if(st.error)throw Error(st.error);
+    if(st.result)return decodeNest(st.result,byId);
+    if(st.best&&st.rev!==rev){rev=st.rev;const pv=decodeNest(st.best,byId),keys=Object.keys(pv);
+      if(keys.length){const cur=keys[keys.length-1];if(keys.length!==seen||!pv[S.tab]){seen=keys.length;S.tab=cur}
+        S.res=pv;S.snap=null;renderCore();
+        const ns=keys.reduce((a,k)=>a+pv[k].sheets.length,0),last=(pv[cur].ext||[]).slice(-1)[0];
+        note=' · '+(nGroups>1?'grupo '+keys.length+' de '+nGroups+' · ':'')+ns+' chapa'+(ns===1?'':'s')+(last?', '+last+' mm na última':'')}}
+    progShow(st.elapsed,st.seconds,fmtSecs(st.elapsed)+' de '+fmtSecs(st.seconds)+note+(st.engine==='rust'?'':' · sem prévia (motor Python)'));
+  }}finally{JOB=null;progHide()}
+}
 function takeSnap(o,engine){
   const vals=S.res?Object.values(S.res):[];
   S.snap={
@@ -558,11 +597,11 @@ async function runNest(){
   for(const k of Object.keys(G0)){const g=S.groups[k];if(!(g&&g.w>2*o.mar+1&&g.h>2*o.mar+1)){status('A chapa de '+k+' precisa ser maior que as margens.',true);return}}
   $('#go').disabled=true;S.res=null;S.snap=null;S.pdf=null;
   if($('#srv').checked){
-    try{$('#nmsg').className='msg';$('#nmsg').textContent=`Otimizando no servidor (${$('#secs').value} s)…`;await new Promise(r=>setTimeout(r,30));
+    try{$('#nmsg').className='msg';$('#nmsg').textContent='Otimizando no servidor ('+fmtSecs(+$('#secs').value)+')…';await new Promise(r=>setTimeout(r,30));
       S.res=await serverNest(o);S.tab=Object.keys(S.res)[0];takeSnap(o,'servidor');
       $('#nmsg').className='msg ok';{const v=Object.values(S.res),n=v.reduce((a,x)=>a+(x.iters||0),0);const rust=v[0].engine==='rust',tail=', '+(v[0].workers||1)+' núcleo(s), '+n.toLocaleString('pt-BR')+' tentativa(s).';
         if(!rust)$('#nmsg').className='msg w';
-        $('#nmsg').textContent=rust?'Pronto · motor Rust'+tail:'Pronto, mas sem o motor Rust: o servidor não achou o executável e usou o Python, bem mais lento'+tail+' Compile com "cargo build --release" na pasta motor.'}
+        $('#nmsg').textContent=rust?(v.some(x=>x.stopped)?'Parado antes do prazo, com o melhor até ali · motor Rust':'Pronto · motor Rust')+tail:'Pronto, mas sem o motor Rust: o servidor não achou o executável e usou o Python, bem mais lento'+tail+' Compile com "cargo build --release" na pasta motor.'}
       toast('Encaixe pronto.','ok');$('#go').disabled=false;render();return}
     catch(e){$('#nmsg').className='msg w';$('#nmsg').textContent='Servidor indisponível ('+e.message+'); usando o motor do navegador…';await new Promise(r=>setTimeout(r,800))}}
   const asked=o.cs;o.cs=Math.max(o.cs,3);S.res={};const keys=Object.keys(groupsOf());let k=0;
@@ -627,7 +666,7 @@ function renderPresets(){
   ['presetApply','presetUpdate','presetDup','presetDel'].forEach(id=>$('#'+id).disabled=!on);
 }
 function applyPreset(preset){
-  setSel('rot',preset.rot);setSel('res',preset.res);setSel('secs',preset.secs);setSel('unit',preset.unit);
+  setSel('rot',preset.rot);setSel('res',preset.res);setSecs(preset.secs,true);setSel('unit',preset.unit);
   if(Number.isFinite(+preset.gap)) $('#gap').value=+preset.gap;
   if(Number.isFinite(+preset.mar)) $('#mar').value=+preset.mar;
   if(Number.isFinite(+preset.tol)) $('#tol').value=+preset.tol;
