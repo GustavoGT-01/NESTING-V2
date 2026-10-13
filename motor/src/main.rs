@@ -279,10 +279,39 @@ fn build_mask(rings: &[Ring], w: f64, h: f64, cs: f64, r: usize) -> Mask {
             }
         }
     }
+    // Além do miolo (linha no centro de cada faixa), marca toda célula que o contorno
+    // toca: assim a máscara sempre cobre a peça inteira, inclusive pontas agudas que
+    // passariam entre duas linhas, e a folga pedida vira um mínimo de verdade.
+    let mut edge: Vec<Vec<(i64, i64)>> = vec![Vec::new(); hh as usize];
+    let ri = r as i64;
+    for q in rings {
+        let n = q.len();
+        for i in 0..n {
+            let (a, b) = (q[i], q[(i + 1) % n]);
+            let (lo, hi) = if a.1 < b.1 { (a.1, b.1) } else { (b.1, a.1) };
+            let mut y = ((lo / cs).floor() as i64 + ri).max(0);
+            let y1 = ((hi / cs).floor() as i64 + ri).min(hh - 1);
+            while y <= y1 {
+                let (xa, xb) = if lo == hi {
+                    (a.0, b.0)
+                } else {
+                    let b0 = (y - ri) as f64 * cs;
+                    let (ya, yb) = (lo.max(b0), hi.min(b0 + cs));
+                    (a.0 + (ya - a.1) / (b.1 - a.1) * (b.0 - a.0), a.0 + (yb - a.1) / (b.1 - a.1) * (b.0 - a.0))
+                };
+                let x0 = ((xa.min(xb) / cs).floor() as i64 + ri).max(0);
+                let x1 = ((xa.max(xb) / cs).floor() as i64 + ri).min(ww - 1);
+                if x1 >= x0 {
+                    edge[y as usize].push((x0, x1));
+                }
+                y += 1;
+            }
+        }
+    }
     let mut rows: Vec<Vec<(i64, i64)>> = Vec::with_capacity(hh as usize);
-    for xs in cross.iter_mut() {
+    for (y, xs) in cross.iter_mut().enumerate() {
         xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let mut iv: Vec<(i64, i64)> = Vec::new();
+        let mut iv: Vec<(i64, i64)> = std::mem::take(&mut edge[y]);
         let mut k = 0;
         while k + 1 < xs.len() {
             let x0 = ((xs[k] / cs - 0.5).round_ties_even() as i64 + r as i64).max(0);
@@ -299,7 +328,7 @@ fn build_mask(rings: &[Ring], w: f64, h: f64, cs: f64, r: usize) -> Mask {
         let ri = r as i64;
         for iv in rows.iter_mut() {
             for e in iv.iter_mut() {
-                *e = ((e.0 - ri).max(ri), (e.1 + ri).min(ww - 1));
+                *e = ((e.0 - ri).max(0), (e.1 + ri).min(ww - 1));
             }
             iv.retain(|e| e.1 >= e.0);
             merge(iv);
@@ -492,19 +521,26 @@ impl Sheet {
         best
     }
 
-    fn put(&mut self, m: &Mask, gx: usize, gy: usize) {
-        for (ry, runs) in &m.rows {
-            let y = gy + ry;
+    /// Ocupa a chapa com a peça. `big` é a mesma peça com folga maior (d células a mais
+    /// de cada lado): o que passar da borda da chapa é cortado.
+    fn put(&mut self, m: &Mask, big: &Mask, d: usize, gx: usize, gy: usize) {
+        for (ry, runs) in &big.rows {
+            let y = gy as i64 - d as i64 + *ry as i64;
+            if y < 0 || y >= self.h as i64 {
+                continue;
+            }
+            let y = y as usize;
             let (a, b) = (y * self.nw, (y + 1) * self.nw);
             for &(s, l) in runs {
-                let lo = gx + s as usize;
-                let hi = (lo + l as usize - 1).min(self.w - 1);
+                let lo = gx as i64 - d as i64 + s as i64;
+                let hi = (lo + l as i64 - 1).min(self.w as i64 - 1);
+                let lo = lo.max(0);
                 if lo <= hi {
-                    set_range(&mut self.occ[a..b], lo, hi);
+                    set_range(&mut self.occ[a..b], lo as usize, hi as usize);
+                    self.filled[y] = true;
+                    self.dirty[y] = true;
                 }
             }
-            self.filled[y] = true;
-            self.dirty[y] = true;
         }
         self.extent = self.extent.max(gx + m.w);
         self.used += m.cells;
@@ -564,10 +600,21 @@ struct Ent {
     fine: bool,
 }
 
+/// Folga em células para garantir `gap` mm reais entre duas peças.
+///
+/// A máscara cobre a peça inteira, então duas peças com T células livres entre elas
+/// ficam a pelo menos T * cs mm. T é repartido entre a máscara que testa a posição (r)
+/// e a que ocupa a chapa (rb); com T ímpar, rb = r + 1.
+fn radii(gap: f64, cs: f64) -> (usize, usize) {
+    let total = (gap / cs - 1e-9).ceil().max(0.0) as usize;
+    (total / 2, total - total / 2)
+}
+
 struct Opt<'a> {
     cs: f64,
     mar: f64,
     r: usize,
+    rb: usize,
     boxed: bool,
     rules: &'a Rules,
 }
@@ -576,6 +623,8 @@ struct Opt<'a> {
 struct Cache {
     map: HashMap<(usize, u64, bool), usize>,
     masks: Vec<Mask>,
+    /// Mesma peça com a folga maior, usada para ocupar a chapa (None quando rb == r).
+    big: Vec<Option<Mask>>,
 }
 
 struct SheetOut {
@@ -662,6 +711,7 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
                         None => {
                             let (rings, mw, mh) = transform(&it.rings, a, mi);
                             cache.masks.push(build_mask(&rings, mw, mh, cs, r));
+                            cache.big.push(if opt.rb != r { Some(build_mask(&rings, mw, mh, cs, opt.rb)) } else { None });
                             cache.map.insert(key, cache.masks.len() - 1);
                             cache.masks.len() - 1
                         }
@@ -705,7 +755,8 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
             }
             if !cands.is_empty() {
                 let c = &cands[gene.min(cands.len() - 1)];
-                sh.put(&cache.masks[c.mask], c.sp.0, c.sp.1);
+                let m = &cache.masks[c.mask];
+                sh.put(m, cache.big[c.mask].as_ref().unwrap_or(m), opt.rb - r, c.sp.0, c.sp.1);
                 sh.gids.insert(gid);
                 if tog && !opened.contains_key(&gid) {
                     opened.insert(gid, si);
@@ -857,7 +908,8 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
     let t1 = seconds * if free_any { 0.55 } else { 0.4 };
     let cs1 = if free_any { cs.max(4.0) } else { cs };
     let none: Vec<Vec<f64>> = vec![Vec::new(); items.len()];
-    let o1 = Opt { cs: cs1, mar, r: (gap / 2.0 / cs1).ceil() as usize, boxed, rules: base.rules };
+    let (r1, rb1) = radii(gap, cs1);
+    let o1 = Opt { cs: cs1, mar, r: r1, rb: rb1, boxed, rules: base.rules };
     let (b1, it1) = search(items, &none, g, &o1, t1, &mut rnd, None, &mut Cache::default());
     // etapa 2: refina ângulos ao redor do escolhido por peça
     let mut chosen: Vec<Option<f64>> = vec![None; items.len()];
@@ -881,7 +933,8 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
         })
         .collect();
     let order: Vec<Ent> = b1.order.iter().map(|e| Ent { uid: e.uid, gene: e.gene, fine: true }).collect();
-    let o2 = Opt { cs, mar, r: (gap / 2.0 / cs).ceil() as usize, boxed, rules: base.rules };
+    let (r2, rb2) = radii(gap, cs);
+    let o2 = Opt { cs, mar, r: r2, rb: rb2, boxed, rules: base.rules };
     let mut cache2 = Cache::default();
     let tp0 = Instant::now();
     let r1 = pack(&order, items, &fine, g, &o2, &mut cache2);
@@ -1038,7 +1091,8 @@ fn run(text: &str) -> Result<String, String> {
     if let Some(order) = p.get("order") {
         let g = groups.first().ok_or("sem grupo")?;
         let ord: Vec<Ent> = order.arr().iter().map(|e| Ent { uid: e.arr()[0].num().unwrap_or(0.0) as usize, gene: e.arr()[1].num().unwrap_or(0.0) as u8, fine: false }).collect();
-        let opt = Opt { cs, mar, r: (gap / 2.0 / cs).ceil() as usize, boxed: p.get("crit").map_or(false, |c| c.text() == "box"), rules: &rules };
+        let (r, rb) = radii(gap, cs);
+        let opt = Opt { cs, mar, r, rb, boxed: p.get("crit").map_or(false, |c| c.text() == "box"), rules: &rules };
         let res = pack(&ord, &g.items, &vec![Vec::new(); g.items.len()], (g.w, g.h), &opt, &mut Cache::default());
         let sheets: Vec<String> = res
             .sheets

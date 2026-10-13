@@ -152,10 +152,34 @@ class Mask:
                     if (a[1] > yy) != (b[1] > yy):
                         cross[y].append(a[0] + (yy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]))
                     y += 1
+        # Além do miolo (linha no centro de cada faixa), marca toda célula que o contorno
+        # toca: assim a máscara sempre cobre a peça inteira, inclusive pontas agudas que
+        # passariam entre duas linhas, e a folga pedida vira um mínimo de verdade.
+        edge = [0] * H
+        for q in rings:
+            n = len(q)
+            for i in range(n):
+                a, b = q[i], q[(i + 1) % n]
+                lo, hi = (a[1], b[1]) if a[1] < b[1] else (b[1], a[1])
+                y = max(0, math.floor(lo / cs) + r)
+                y1 = min(H - 1, math.floor(hi / cs) + r)
+                while y <= y1:
+                    if lo == hi:
+                        xa, xb = a[0], b[0]
+                    else:
+                        b0 = (y - r) * cs
+                        ya, yb = max(lo, b0), min(hi, b0 + cs)
+                        xa = a[0] + (ya - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+                        xb = a[0] + (yb - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+                    x0 = max(0, math.floor(min(xa, xb) / cs) + r)
+                    x1 = min(W - 1, math.floor(max(xa, xb) / cs) + r)
+                    if x1 >= x0:
+                        edge[y] |= ((1 << (x1 - x0 + 1)) - 1) << x0
+                    y += 1
         for y in range(H):
             xs = cross[y]
             xs.sort()
-            v = 0
+            v = edge[y]
             for k in range(0, len(xs) - 1, 2):
                 x0 = max(0, round(xs[k] / cs - 0.5) + r)
                 x1 = min(W - 1, round(xs[k + 1] / cs - 0.5) + r)
@@ -163,7 +187,9 @@ class Mask:
                     v |= ((1 << (x1 - x0 + 1)) - 1) << x0
             rows[y] = v
         if r > 0:
-            rows = [(cover(v, 2 * r + 1) << r) & ((1 << W) - 1) for v in rows]
+            # engrossa r células para a esquerda e para a direita (antes o lado esquerdo
+            # da peça ficava sem folga, e a distância real saía menor que a pedida)
+            rows = [cover(v << r, 2 * r + 1) & ((1 << W) - 1) for v in rows]
             rows = [
                 _or(rows[max(0, y - r): y + r + 1]) for y in range(H)
             ]
@@ -259,13 +285,20 @@ class Sheet:
                         break
         return best
 
-    def put(self, m, gx, gy):
-        for ry, runs in m.rows:
+    def put(self, m, gx, gy, big=None, d=0):
+        """Ocupa a chapa com a peça. `big` é a mesma peça com folga maior (d células a
+        mais de cada lado): o que passar da borda da chapa é cortado."""
+        full = (1 << self.W) - 1
+        x = gx - d
+        for ry, runs in (big or m).rows:
+            y = gy - d + ry
+            if y < 0 or y >= self.H:
+                continue
             v = 0
             for s, l in runs:
                 v |= ((1 << l) - 1) << s
-            self.occ[gy + ry] |= v << gx
-            self.cov[gy + ry].clear()
+            self.occ[y] |= (v << x if x >= 0 else v >> -x) & full
+            self.cov[y].clear()
         self.extent = max(self.extent, gx + m.W)
         self.used += m.cells
         self.top = max(self.top, gy + m.H)
@@ -297,8 +330,19 @@ def _allows(have, gid, rules):
     return True
 
 
+def radii(gap, cs):
+    """Folga em células para garantir `gap` mm reais entre duas peças.
+
+    A máscara cobre a peça inteira, então duas peças com T células livres entre elas
+    ficam a pelo menos T * cs mm. T é repartido entre a máscara que testa a posição (r)
+    e a que ocupa a chapa (rb); com T ímpar, rb = r + 1."""
+    total = max(0, math.ceil(gap / cs - 1e-9))
+    return {"r": total // 2, "rb": total - total // 2}
+
+
 def pack(order, g, opt, cache):
     cs, r = opt["cs"], opt["r"]
+    rb = opt.get("rb", r)
     W = int((g["w"] - 2 * opt["mar"]) // cs)
     H = int((g["h"] - 2 * opt["mar"]) // cs)
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
@@ -340,7 +384,7 @@ def pack(order, g, opt, cache):
                     c = cache.get(k)
                     if c is None:
                         rings, w, h = transform(it["rings"], a, mi)
-                        c = cache[k] = (Mask(rings, w, h, cs, r), w, h)
+                        c = cache[k] = (Mask(rings, w, h, cs, r), w, h, Mask(rings, w, h, cs, rb) if rb != r else None)
                     m = c[0]
                     if m.W > W or m.H > H:
                         continue
@@ -366,7 +410,7 @@ def pack(order, g, opt, cache):
                     cands.sort(key=lambda c_: c_[0])
             if cands:
                 _, a, mi, m, sp = cands[min(gene, len(cands) - 1)]
-                sh.put(m, *sp)
+                sh.put(m, sp[0], sp[1], cache[(it["id"], a, mi)][3], rb - r)
                 sh.gids.add(gid)
                 if gid in together and gid not in opened:
                     opened[gid] = si
@@ -452,7 +496,7 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x"):
     t1 = seconds * (0.55 if free_any else 0.4)
     cs1 = max(cs, 4.0) if free_any else cs
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
-    o1 = {"cs": cs1, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs1), "rules": rules, "crit": crit}
+    o1 = {"cs": cs1, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs1)}
     order, res, sc, it1 = _search(items, g, o1, t1, rnd)
     # etapa 2: refina ângulos ao redor do escolhido por peça
     chosen = {}
@@ -466,7 +510,7 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x"):
         if a is not None and free_any and len(it["angs"]) > 4:
             n["angs"] = sorted(set(refine(a)) | ({0.0, 180.0} if 0.0 in it["angs"] else set()))
         fine.append(n)
-    o2 = {"cs": cs, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs), "rules": rules, "crit": crit}
+    o2 = {"cs": cs, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs)}
     cache2 = {}
     tp = time.time()
     r1 = pack(fine, g, o2, cache2)
