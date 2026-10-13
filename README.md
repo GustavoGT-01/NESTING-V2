@@ -58,6 +58,7 @@ Depois abra http://127.0.0.1:8080. O programa funciona enquanto o servidor estiv
 | `eps.py` | Geração do EPS e conferência por releitura |
 | `store.py` | Gravação dos dados em JSON |
 | `iniciar.bat` | Atalho para ligar o programa no Windows |
+| `bench.py` | Mede chapas usadas e aproveitamento de um projeto gravado |
 | `tests/` | Testes automáticos |
 
 ## Dados
@@ -78,6 +79,14 @@ python -m unittest discover -s tests -t .
 São 22 testes do servidor (gravação de dados e EPS).
 
 Há também um teste de fluxo completo em `tests/e2e_jsdom.js`, que precisa do Node.js com o pacote `jsdom`. O caminho do projeto está fixo no topo desse arquivo e precisa ser ajustado antes de rodar.
+
+## Medir o aproveitamento
+
+```bash
+python bench.py --seconds 30
+```
+
+Lê os projetos gravados em `data/` (sem alterar nada), roda o encaixe e mostra, por material e espessura, as chapas usadas, o comprimento usado na última chapa e o aproveitamento. Serve para comparar o motor antes e depois de uma mudança, com as peças reais.
 
 ## Limitações conhecidas
 

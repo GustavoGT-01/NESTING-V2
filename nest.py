@@ -9,6 +9,11 @@ em cada linha vira operação de bits em inteiros grandes, o que é bem mais rá
 testar célula a célula. Sobre isso roda uma busca local com limite de tempo: troca a
 ordem das peças e fica com a melhor solução (menos chapas, depois menor comprimento
 usado na última chapa).
+
+Dois critérios de posição rodam em paralelo (metade dos núcleos cada) e vence o melhor:
+"x" avança o mínimo no comprimento da chapa; "box" ocupa o menor retângulo, o que deita
+e empilha peças longas e finas. Cada chapa lembra a última posição achada para cada
+orientação de peça: como a chapa só enche, a busca seguinte parte dali.
 """
 
 from __future__ import annotations
@@ -125,21 +130,30 @@ def runs_of(v):
 
 
 class Mask:
-    __slots__ = ("W", "H", "rows")
+    __slots__ = ("W", "H", "rows", "cells", "scan")
 
     def __init__(self, rings, w, h, cs, r):
         W = math.ceil(w / cs) + 1 + 2 * r
         H = math.ceil(h / cs) + 1 + 2 * r
         rows = [0] * H
-        for y in range(H):
-            yy = (y - r + 0.5) * cs
-            xs = []
-            for q in rings:
-                n = len(q)
-                for i in range(n):
-                    a, b = q[i], q[(i + 1) % n]
+        cross = [[] for _ in range(H)]
+        for q in rings:
+            n = len(q)
+            for i in range(n):
+                a, b = q[i], q[(i + 1) % n]
+                lo, hi = (a[1], b[1]) if a[1] < b[1] else (b[1], a[1])
+                if lo == hi:
+                    continue
+                # linhas com lo <= yy < hi, onde yy = (y - r + 0.5) * cs
+                y = max(0, math.ceil(lo / cs + r - 0.5) - 1)
+                y1 = min(H - 1, math.floor(hi / cs + r - 0.5) + 1)
+                while y <= y1:
+                    yy = (y - r + 0.5) * cs
                     if (a[1] > yy) != (b[1] > yy):
-                        xs.append(a[0] + (yy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]))
+                        cross[y].append(a[0] + (yy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]))
+                    y += 1
+        for y in range(H):
+            xs = cross[y]
             xs.sort()
             v = 0
             for k in range(0, len(xs) - 1, 2):
@@ -155,6 +169,12 @@ class Mask:
             ]
         self.W, self.H = W, H
         self.rows = [(y, runs_of(v)) for y, v in enumerate(rows) if v]
+        self.cells = sum(l for _, runs in self.rows for _, l in runs)
+        # Ordem de teste de colisão: linhas espalhadas primeiro (meio, quartos, ...),
+        # para achar o choque cedo em vez de varrer linhas vizinhas quase iguais.
+        n = len(self.rows)
+        bits = max(1, (n - 1).bit_length())
+        self.scan = [self.rows[i] for i in sorted(range(n), key=lambda i: int(format(i, "0%db" % bits)[::-1], 2))]
 
 
 def _or(seq):
@@ -165,7 +185,7 @@ def _or(seq):
 
 
 class Sheet:
-    __slots__ = ("W", "H", "occ", "cov", "placed", "extent", "gids")
+    __slots__ = ("W", "H", "occ", "cov", "placed", "extent", "gids", "used", "memo", "top")
 
     def __init__(self, W, H):
         self.W, self.H = W, H
@@ -174,6 +194,11 @@ class Sheet:
         self.placed = []
         self.extent = 0
         self.gids = set()
+        self.used = 0
+        self.top = 0
+        # Por orientação de peça: última posição achada, ou False se já não cabe.
+        # A chapa só enche, então a melhor posição (gx, depois gy) nunca recua.
+        self.memo = {}
 
     def cover(self, row, length):
         c = self.cov[row]
@@ -182,18 +207,44 @@ class Sheet:
             v = c[length] = cover(self.occ[row], length)
         return v
 
-    def find(self, m, cap):
-        """Melhor (gx, gy) leftmost; cap limita gx para podar."""
+    def fits(self, m, gx, gy):
+        occ = self.occ
+        for ry, runs in m.scan:
+            o = occ[gy + ry]
+            if o:
+                o >>= gx
+                for s, l in runs:
+                    if (o >> s) & ((1 << l) - 1):
+                        return False
+        return True
+
+    def find(self, m, cap, last=None):
+        """Melhor (gx, gy) leftmost; cap limita gx para podar.
+
+        last = posição devolvida antes para a mesma máscara nesta chapa: nada à
+        esquerda dela (nem abaixo, na mesma coluna) volta a ficar livre."""
         best = None
         maxx = min(self.W - m.W, cap - 1)
         if maxx < 0 or self.H < m.H:
             return None
+        lo = 0
+        if last:
+            gx0, gy0 = last
+            if gx0 > maxx:
+                return None
+            for gy in range(gy0, self.H - m.H + 1):
+                if self.fits(m, gx0, gy):
+                    return (gx0, gy)
+            lo = gx0 + 1
+            if lo > maxx:
+                return None
+        below = (1 << lo) - 1
         for gy in range(0, self.H - m.H + 1):
-            valid = (1 << (best[0] if best else maxx + 1)) - 1
+            valid = ((1 << (best[0] if best else maxx + 1)) - 1) & ~below
             if not valid:
                 break
             forb = 0
-            for ry, runs in m.rows:
+            for ry, runs in m.scan:
                 if self.occ[gy + ry]:
                     for s, l in runs:
                         forb |= self.cover(gy + ry, l) >> s
@@ -204,7 +255,7 @@ class Sheet:
                 gx = (free & -free).bit_length() - 1
                 if best is None or gx < best[0]:
                     best = (gx, gy)
-                    if gx == 0:
+                    if gx == lo:
                         break
         return best
 
@@ -216,6 +267,8 @@ class Sheet:
             self.occ[gy + ry] |= v << gx
             self.cov[gy + ry].clear()
         self.extent = max(self.extent, gx + m.W)
+        self.used += m.cells
+        self.top = max(self.top, gy + m.H)
 
 
 def _allows(have, gid, rules):
@@ -254,6 +307,9 @@ def pack(order, g, opt, cache):
     if W < 1 or H < 1:
         return sheets, [it["uid"] for it in order], ["tamanho"] * len(order)
     opened = {}
+    # "x": menor avanço no comprimento (clássico). "box": menor retângulo ocupado,
+    # que deita peças longas e finas e as empilha em vez de incliná-las.
+    box = opt.get("crit") == "box"
     for it in order:
         gid = str(it.get("gid") or "")
         angs, gene = it["angs"], it.get("gene", 0)
@@ -288,11 +344,25 @@ def pack(order, g, opt, cache):
                     m = c[0]
                     if m.W > W or m.H > H:
                         continue
-                    cap = (cands[gene][0][0] - m.W + 1) if len(cands) > gene else W
-                    sp = sh.find(m, cap)
-                    if sp is None:
+                    last = sh.memo.get(k)
+                    if last is False:
                         continue
-                    cands.append(((sp[0] + m.W, sp[1]), a, mi, m, sp))
+                    if sh.used + m.cells > W * H:
+                        sh.memo[k] = False
+                        continue
+                    cap = W if box else ((cands[gene][0][0] - m.W + 1) if len(cands) > gene else W)
+                    sp = sh.find(m, cap, last)
+                    if sp is None:
+                        if cap >= W:
+                            sh.memo[k] = False  # busca completa: não cabe mais nesta chapa
+                        continue
+                    sh.memo[k] = sp
+                    right = sp[0] + m.W
+                    if box:
+                        key = (max(sh.extent, right) * max(sh.top, sp[1] + m.H), right, sp[1])
+                    else:
+                        key = (right, sp[1])
+                    cands.append((key, a, mi, m, sp))
                     cands.sort(key=lambda c_: c_[0])
             if cands:
                 _, a, mi, m, sp = cands[min(gene, len(cands) - 1)]
@@ -323,9 +393,9 @@ def score(res):
     return (len(fail), len(sheets), last)
 
 
-def _search(items, g, opt, seconds, rnd, seeds=None):
+def _search(items, g, opt, seconds, rnd, seeds=None, known=None, cache=None):
     """Busca local sobre ordem + gene de diversificação. Devolve (ordem, resultado, score)."""
-    cache = {}
+    cache = {} if cache is None else cache
     deadline = time.time() + seconds
     box = lambda i: (max(p[0] for r in i["rings"] for p in r), max(p[1] for r in i["rings"] for p in r))
     starts = seeds or [
@@ -333,8 +403,8 @@ def _search(items, g, opt, seconds, rnd, seeds=None):
         sorted(items, key=lambda i: -max(box(i))),
         sorted(items, key=lambda i: -(box(i)[0] * box(i)[1])),
     ]
-    best = None
-    for o in starts:
+    best = known
+    for o in ([] if known else starts):
         res = pack(o, g, opt, cache)
         sc = score(res)
         if best is None or sc < best[2]:
@@ -361,12 +431,13 @@ def _search(items, g, opt, seconds, rnd, seeds=None):
     return best[0], best[1], best[2], iters
 
 
-def nest_group(g, items, opt, seconds, seed=1):
+def nest_group(g, items, opt, seconds, seed=1, crit="x"):
     """g={w,h}; items=[{id,rings,mirror,area,rot?}] já expandidos por quantidade.
 
     Etapa 1 (grossa, ~55% do tempo): grade de 4 mm, muitos ângulos, acha ordem e giro.
     Etapa 2 (fina): grade pedida, ângulos refinados ao redor dos escolhidos."""
     rnd = random.Random(seed)
+    t0 = time.time()
     rot = opt["rot"]
     gap, mar, cs = opt["gap"], opt["mar"], opt["cs"]
     cache_angs = {}
@@ -381,7 +452,7 @@ def nest_group(g, items, opt, seconds, seed=1):
     t1 = seconds * (0.55 if free_any else 0.4)
     cs1 = max(cs, 4.0) if free_any else cs
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
-    o1 = {"cs": cs1, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs1), "rules": rules}
+    o1 = {"cs": cs1, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs1), "rules": rules, "crit": crit}
     order, res, sc, it1 = _search(items, g, o1, t1, rnd)
     # etapa 2: refina ângulos ao redor do escolhido por peça
     chosen = {}
@@ -395,18 +466,24 @@ def nest_group(g, items, opt, seconds, seed=1):
         if a is not None and free_any and len(it["angs"]) > 4:
             n["angs"] = sorted(set(refine(a)) | ({0.0, 180.0} if 0.0 in it["angs"] else set()))
         fine.append(n)
-    o2 = {"cs": cs, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs), "rules": rules}
+    o2 = {"cs": cs, "gap": gap, "mar": mar, "r": math.ceil(gap / 2 / cs), "rules": rules, "crit": crit}
     cache2 = {}
+    tp = time.time()
     r1 = pack(fine, g, o2, cache2)
+    tp = time.time() - tp  # custo de uma tentativa na grade fina
     best = (fine, r1, score(r1))
-    plain = sorted(items, key=lambda i: -i["area"])
-    r2 = pack(plain, g, o2, cache2)
-    if score(r2) < best[2]:
-        best = (plain, r2, score(r2))
-    left = max(0.5, seconds - t1 - 0.0)
-    order2, res2, sc2, it2 = _search(items, g, o2, left * 0.9, rnd, seeds=[best[0]])
-    if sc2 < best[2]:
-        best = (order2, res2, sc2)
+    it2 = 0
+    # O prazo vale: só gasta outra tentativa na grade fina se ainda couber no tempo pedido.
+    if time.time() - t0 + tp < seconds:
+        plain = sorted(items, key=lambda i: -i["area"])
+        r2 = pack(plain, g, o2, cache2)
+        if score(r2) < best[2]:
+            best = (plain, r2, score(r2))
+    left = seconds - (time.time() - t0)
+    if left > tp:
+        order2, res2, sc2, it2 = _search(items, g, o2, left - tp, rnd, known=best, cache=cache2)
+        if sc2 < best[2]:
+            best = (order2, res2, sc2)
     packed = best[1]
     sheets, fail = packed[0], packed[1]
     why = packed[2] if len(packed) > 2 else ["tamanho"] * len(fail)
@@ -423,8 +500,8 @@ def nest_group(g, items, opt, seconds, seed=1):
 
 
 def _worker(args):
-    g, items, opt, seconds, seed = args
-    return nest_group(g, items, opt, seconds, seed)
+    g, items, opt, seconds, seed, crit = args
+    return nest_group(g, items, opt, seconds, seed, crit)
 
 
 def _key(r):
@@ -485,10 +562,13 @@ def nest_all(payload, pool=None, workers=1):
         g = {"w": v["w"], "h": v["h"]}
         secs = max(1.0, total * weight[k] / wsum)
         if pool is None or workers < 2:
-            out[k] = nest_group(g, v["items"], opt, secs)
+            res = [nest_group(g, v["items"], opt, secs / 2, 1, crit) for crit in ("x", "box")]
+            out[k] = min(res, key=_key)
+            out[k]["iters"] = sum(r["iters"] for r in res)
             out[k]["workers"] = 1
             continue
-        futs = [pool.submit(_worker, (g, v["items"], opt, secs, 1 + 97 * n)) for n in range(workers)]
+        # metade dos núcleos com cada critério de posição; fica a melhor solução
+        futs = [pool.submit(_worker, (g, v["items"], opt, secs, 1 + 97 * n, "box" if n % 2 else "x")) for n in range(workers)]
         res = [f.result() for f in futs]
         best = min(res, key=_key)
         best["iters"] = sum(r["iters"] for r in res)
