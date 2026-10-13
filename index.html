@@ -183,7 +183,7 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
         <label class="f">Otimizar por<select id="secs"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="90">1,5 min</option><option value="240">4 min</option></select></label>
       </div>
       <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (melhor aproveitamento)</label>
-      <label class="f chk"><input type="checkbox" id="fill" checked> Preencher furos das peças maiores</label></div></details>
+      <label class="f chk"><input type="checkbox" id="fill" checked> Encaixar peças dentro dos furos das maiores</label></div></details>
     <button class="pri" id="go" type="button" disabled>Encaixar</button>
     <div class="msg" id="nmsg"></div>
     <div class="btns"><button type="button" id="nestSave" disabled>Salvar encaixe</button><button type="button" id="nestOpen" disabled>Abrir salvo</button></div>
@@ -440,6 +440,11 @@ function mask(rings,w,h,cs,r){
   for(let y=0;y<H;y++){const yy=(y-r+.5)*cs,xs=[];
     for(const q of rings)for(let i=0,n=q.length;i<n;i++){const a=q[i],b=q[(i+1)%n];if((a[1]>yy)!==(b[1]>yy))xs.push(a[0]+(yy-a[1])/(b[1]-a[1])*(b[0]-a[0]))}
     xs.sort((a,b)=>a-b);for(let k=0;k+1<xs.length;k+=2){const x0=Math.max(0,Math.round(xs[k]/cs-.5)+r),x1=Math.min(W-1,Math.round(xs[k+1]/cs-.5)+r);for(let x=x0;x<=x1;x++)m[y*W+x]=1}}
+  /* Além do miolo, marca toda célula que o contorno toca: pontas agudas entre duas faixas não escapam e o espaço pedido vira um mínimo. */
+  for(const q of rings)for(let i=0,n=q.length;i<n;i++){const a=q[i],b=q[(i+1)%n],lo=Math.min(a[1],b[1]),hi=Math.max(a[1],b[1]);
+    for(let y=Math.max(0,Math.floor(lo/cs)+r),y1=Math.min(H-1,Math.floor(hi/cs)+r);y<=y1;y++){let xa=a[0],xb=b[0];
+      if(lo!==hi){const b0=(y-r)*cs,ya=Math.max(lo,b0),yb=Math.min(hi,b0+cs);xa=a[0]+(ya-a[1])/(b[1]-a[1])*(b[0]-a[0]);xb=a[0]+(yb-a[1])/(b[1]-a[1])*(b[0]-a[0])}
+      for(let x=Math.max(0,Math.floor(Math.min(xa,xb)/cs)+r),x1=Math.min(W-1,Math.floor(Math.max(xa,xb)/cs)+r);x<=x1;x++)m[y*W+x]=1}}
   if(r>0){const t=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(m[y*W+x])for(let k=Math.max(0,x-r);k<=Math.min(W-1,x+r);k++)t[y*W+k]=1;
     m.fill(0);for(let y=0;y<H;y++)if(t.subarray(y*W,y*W+W).some(v=>v))for(let x=0;x<W;x++)if(t[y*W+x])for(let k=Math.max(0,y-r);k<=Math.min(H-1,y+r);k++)m[k*W+x]=1}
   const runs=[];for(let y=0;y<H;y++){let x=0;while(x<W){if(m[y*W+x]){let s=x;while(x<W&&m[y*W+x])x++;runs.push([y,s,x])}else x++}}
@@ -471,7 +476,7 @@ function nestGroup(g,items,o,order){
   if(W<1||H<1) return {sheets,fail:order.slice(),failWhy:order.map(()=>'tamanho')};
   const rules=o.rules||{mix:true,isolate:[],together:[],forbid:[]};
   const together=new Set(rules.together||[]), opened=new Map();
-  const cache=new Map(),mk=(it,a,mi)=>{const k=it.id+'|'+a+'|'+mi;if(!cache.has(k)){const t=tf(it.rings,a,mi);cache.set(k,{...t,m:mask(t.rings,t.w,t.h,cs,r)})}return cache.get(k)};
+  const cache=new Map(),mk=(it,a,mi)=>{const k=it.id+'|'+a+'|'+mi;if(!cache.has(k)){const t=tf(it.rings,a,mi);cache.set(k,{...t,m:mask(o.fill===false?[t.rings[0]]:t.rings,t.w,t.h,cs,r)})}return cache.get(k)};
   const angs=[];const st=o.rot===-1?15:o.rot;if(st>0)for(let a=0;a<360;a+=st)angs.push(a);else angs.push(0);
   for(const it of order){
     const gid=it.groupId||'';
@@ -501,7 +506,7 @@ function nestGroup(g,items,o,order){
 const used=g=>g.sheets.reduce((s,sh)=>s+sh.placed.reduce((q,p)=>q+p.it.A,0),0);
 async function serverNest(o){
   const G=groupsOf(),groups={},byId={};
-  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
+  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
   const r=await sfetch('/api/nest',{method:'POST',body:JSON.stringify({...o,seconds:+$('#secs').value,groups})});
   if(!r.ok)throw Error(await r.text());const R=await r.json(),out={};
   for(const k in R){
@@ -548,7 +553,7 @@ $('#nestSave').onclick=async()=>{
   S.savedNest={savedAt:new Date().toISOString(),sig:nestSig(),tab:S.tab,sheets,snap:JSON.parse(JSON.stringify(S.snap)),res:packNest()};
   hist('nest.save',{sheets,groups:Object.keys(S.res)});render();await flush();status('Encaixe salvo no projeto.',false)};
 async function runNest(){
-  const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),rules:currentRules()};
+  const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),fill:$('#fill').checked,rules:currentRules()};
   const G0=groupsOf();
   for(const k of Object.keys(G0)){const g=S.groups[k];if(!(g&&g.w>2*o.mar+1&&g.h>2*o.mar+1)){status('A chapa de '+k+' precisa ser maior que as margens.',true);return}}
   $('#go').disabled=true;S.res=null;S.snap=null;S.pdf=null;
@@ -570,7 +575,7 @@ async function runNest(){
   $('#nmsg').className='msg ok';$('#nmsg').textContent='Pronto.';toast('Encaixe pronto.','ok');$('#go').disabled=false;S.tab=Object.keys(S.res)[0];render()}
 const showResult=()=>{if(matchMedia('(max-width:1100px)').matches)$('.mid').scrollIntoView({behavior:'smooth',block:'start'})};
 $('#go').onclick=()=>runNest().then(()=>{if(S.res)showResult()});
-['gap','mar','rot','res','secs'].forEach(id=>$('#'+id).addEventListener('change',()=>{if(S.res){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Parâmetro alterado. Encaixe de novo.';render()}}));
+['gap','mar','rot','res','secs','fill'].forEach(id=>$('#'+id).addEventListener('change',()=>{if(S.res){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Parâmetro alterado. Encaixe de novo.';render()}}));
 
 /* ---------- cores e presets ---------- */
 function hexColor(v,fb){return /^#[0-9a-fA-F]{6}$/.test(v||'')?v:fb}
