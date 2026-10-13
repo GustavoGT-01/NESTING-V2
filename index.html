@@ -182,7 +182,7 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
         <label class="f">Resolução (mm)<select id="res"><option value="1">1 · máximo</option><option value="2" selected>2 · preciso</option><option value="3">3 · equilibrado</option><option value="5">5 · rápido</option></select></label>
         <label class="f">Otimizar por<select id="secs"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="90">1,5 min</option><option value="240">4 min</option></select></label>
       </div>
-      <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (melhor aproveitamento)</label>
+      <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (Rust, melhor aproveitamento)</label>
       <label class="f chk"><input type="checkbox" id="fill" checked> Encaixar peças dentro dos furos das maiores</label></div></details>
     <button class="pri" id="go" type="button" disabled>Encaixar</button>
     <div class="msg" id="nmsg"></div>
@@ -560,7 +560,9 @@ async function runNest(){
   if($('#srv').checked){
     try{$('#nmsg').className='msg';$('#nmsg').textContent=`Otimizando no servidor (${$('#secs').value} s)…`;await new Promise(r=>setTimeout(r,30));
       S.res=await serverNest(o);S.tab=Object.keys(S.res)[0];takeSnap(o,'servidor');
-      $('#nmsg').className='msg ok';{const v=Object.values(S.res),n=v.reduce((a,x)=>a+(x.iters||0),0);$('#nmsg').textContent='Pronto · '+(v[0].engine==='rust'?'motor compilado':'servidor')+', '+(v[0].workers||1)+' núcleo(s), '+n.toLocaleString('pt-BR')+' tentativa(s).'}
+      $('#nmsg').className='msg ok';{const v=Object.values(S.res),n=v.reduce((a,x)=>a+(x.iters||0),0);const rust=v[0].engine==='rust',tail=', '+(v[0].workers||1)+' núcleo(s), '+n.toLocaleString('pt-BR')+' tentativa(s).';
+        if(!rust)$('#nmsg').className='msg w';
+        $('#nmsg').textContent=rust?'Pronto · motor Rust'+tail:'Pronto, mas sem o motor Rust: o servidor não achou o executável e usou o Python, bem mais lento'+tail+' Compile com "cargo build --release" na pasta motor.'}
       toast('Encaixe pronto.','ok');$('#go').disabled=false;render();return}
     catch(e){$('#nmsg').className='msg w';$('#nmsg').textContent='Servidor indisponível ('+e.message+'); usando o motor do navegador…';await new Promise(r=>setTimeout(r,800))}}
   const asked=o.cs;o.cs=Math.max(o.cs,3);S.res={};const keys=Object.keys(groupsOf());let k=0;
@@ -631,7 +633,7 @@ function applyPreset(preset){
   if(Number.isFinite(+preset.tol)) $('#tol').value=+preset.tol;
   if(Number.isFinite(+preset.defTh)) $('#defTh').value=+preset.defTh;
   if(typeof preset.defMat==='string') $('#defMat').value=preset.defMat;
-  $('#srv').checked=!!preset.srv;$('#fill').checked=preset.fill!==false;$('#mix').checked=preset.mix!==false;
+  /* o motor do servidor (Rust) é sempre a primeira opção: preset não o desliga */$('#fill').checked=preset.fill!==false;$('#mix').checked=preset.mix!==false;
   S.sets=(preset.sets||[]).map((s,i)=>({id:String(s.id||nid('c')),name:String(s.name||('Conjunto '+(i+1))),color:hexColor(s.color,PALETTE[i%PALETTE.length]),isolate:!!s.isolate,together:!!s.together}));uniqueColors();
   const ids=new Set(S.sets.map(s=>s.id));
   S.forbid=(preset.forbid||[]).filter(p=>Array.isArray(p)&&ids.has(String(p[0]))&&ids.has(String(p[1]))&&String(p[0])!==String(p[1])).map(p=>[String(p[0]),String(p[1])]);
