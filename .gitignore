@@ -1,0 +1,10 @@
+# dados locais dos projetos (pecas, historico, exportacoes)
+data/
+
+__pycache__/
+*.pyc
+node_modules/
+tests/package*.json
+
+# configuracao local do Claude Code
+.claude/
