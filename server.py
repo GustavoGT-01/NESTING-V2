@@ -12,8 +12,8 @@ from concurrent.futures import ProcessPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import engine
 import eps
-import nest
 import store
 
 ROOT = Path(__file__).resolve().parent
@@ -164,7 +164,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
         elif path == "/api/nest":
             try:
-                raw = json.dumps(nest.nest_all(json.loads(data.decode("utf-8")), POOL, WORKERS)).encode("utf-8")
+                raw = json.dumps(engine.nest_all(json.loads(data.decode("utf-8")), POOL, WORKERS)).encode("utf-8")
                 mime = "application/json; charset=utf-8"
             except Exception as exc:
                 self._fail(400, "Falha no encaixe: %s" % exc)
@@ -232,6 +232,7 @@ def main() -> None:
     print(f"Encaixe: {WORKERS} núcleos do processador em uso.")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Aberto em http://{HOST}:{PORT}")
+    print("Motor de encaixe: compilado (Rust)." if engine.find_motor() else "Motor de encaixe: Python (o compilado não foi encontrado).")
     if find_oda():
         print("DWG: conversor encontrado.")
     else:

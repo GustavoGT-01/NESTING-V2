@@ -506,7 +506,7 @@ async function serverNest(o){
   if(!r.ok)throw Error(await r.text());const R=await r.json(),out={};
   for(const k in R){
     const why=Array.isArray(R[k].fail_why)&&R[k].fail_why.length===R[k].fail.length?R[k].fail_why:R[k].fail.map(()=>'tamanho');
-    out[k]={fail:R[k].fail.map(i=>byId[i]),failWhy:why,sheets:R[k].sheets.map(sh=>({placed:sh.map(p=>{const it=byId[p.id],t=tf(it.rings,p.a,p.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:p.x,y:p.y,a:p.a,mi:p.mi}})})),ext:R[k].extent,workers:R[k].workers,iters:R[k].iters};
+    out[k]={fail:R[k].fail.map(i=>byId[i]),failWhy:why,sheets:R[k].sheets.map(sh=>({placed:sh.map(p=>{const it=byId[p.id],t=tf(it.rings,p.a,p.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:p.x,y:p.y,a:p.a,mi:p.mi}})})),ext:R[k].extent,workers:R[k].workers,iters:R[k].iters,engine:R[k].engine};
   }
   return out}
 function takeSnap(o,engine){
@@ -555,7 +555,7 @@ async function runNest(){
   if($('#srv').checked){
     try{$('#nmsg').className='msg';$('#nmsg').textContent=`Otimizando no servidor (${$('#secs').value} s)…`;await new Promise(r=>setTimeout(r,30));
       S.res=await serverNest(o);S.tab=Object.keys(S.res)[0];takeSnap(o,'servidor');
-      $('#nmsg').className='msg ok';$('#nmsg').textContent='Pronto · servidor, '+(Object.values(S.res)[0].workers||1)+' núcleo(s) em paralelo.';
+      $('#nmsg').className='msg ok';{const v=Object.values(S.res),n=v.reduce((a,x)=>a+(x.iters||0),0);$('#nmsg').textContent='Pronto · '+(v[0].engine==='rust'?'motor compilado':'servidor')+', '+(v[0].workers||1)+' núcleo(s), '+n.toLocaleString('pt-BR')+' tentativa(s).'}
       toast('Encaixe pronto.','ok');$('#go').disabled=false;render();return}
     catch(e){$('#nmsg').className='msg w';$('#nmsg').textContent='Servidor indisponível ('+e.message+'); usando o motor do navegador…';await new Promise(r=>setTimeout(r,800))}}
   const asked=o.cs;o.cs=Math.max(o.cs,3);S.res={};const keys=Object.keys(groupsOf());let k=0;

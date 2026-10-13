@@ -38,6 +38,18 @@ Depois abra http://127.0.0.1:8080. O programa funciona enquanto o servidor estiv
 | `NEST_DATA` | Pasta onde os dados são gravados (padrão: `data/`) |
 | `NEST_WORKERS` | Número de núcleos usados no encaixe (padrão: todos) |
 | `ODA_FILE_CONVERTER` | Caminho do ODA File Converter, se não estiver no local padrão |
+| `NEST_MOTOR` | Caminho do motor compilado, se não estiver em `motor/target/release/` |
+
+## Motor compilado (opcional, recomendado)
+
+O encaixe funciona só com Python, mas o motor em Rust testa muito mais arranjos no mesmo tempo. Ele não tem dependências externas. Com o [Rust](https://rustup.rs) instalado:
+
+```bash
+cd motor
+cargo build --release
+```
+
+O servidor encontra o executável sozinho em `motor/target/release/` e avisa no início qual motor está em uso. Os dois motores dão exatamente as mesmas posições para a mesma ordem de peças; a diferença é quantas ordens cada um consegue testar no prazo.
 
 ## Como usar
 
@@ -54,7 +66,9 @@ Depois abra http://127.0.0.1:8080. O programa funciona enquanto o servidor estiv
 |---|---|
 | `index.html` | Toda a interface (HTML, CSS e JavaScript) |
 | `server.py` | Servidor local e rotas da API |
-| `nest.py` | Algoritmo de encaixe |
+| `nest.py` | Algoritmo de encaixe em Python (reserva) |
+| `motor/` | O mesmo algoritmo em Rust, compilado: dezenas de vezes mais rápido |
+| `engine.py` | Escolhe o motor: o compilado quando existe, senão o `nest.py` |
 | `eps.py` | Geração do EPS e conferência por releitura |
 | `store.py` | Gravação dos dados em JSON |
 | `iniciar.bat` | Atalho para ligar o programa no Windows |
@@ -85,6 +99,8 @@ Há também um teste de fluxo completo em `tests/e2e_jsdom.js`, que precisa do N
 ```bash
 python bench.py --seconds 30
 ```
+
+Use `--motor python` ou `--motor rust` para comparar os dois motores.
 
 Lê os projetos gravados em `data/` (sem alterar nada), roda o encaixe e mostra, por material e espessura, as chapas usadas, o comprimento usado na última chapa e o aproveitamento. Serve para comparar o motor antes e depois de uma mudança, com as peças reais.
 

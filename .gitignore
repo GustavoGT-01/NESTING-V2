@@ -8,3 +8,6 @@ tests/package*.json
 
 # configuracao local do Claude Code
 .claude/
+
+# motor compilado: só o código-fonte vai para o repositório
+motor/target/
