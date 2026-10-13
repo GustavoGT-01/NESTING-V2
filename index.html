@@ -149,8 +149,7 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
     <datalist id="mats"><option>Aço carbono</option><option>Inox 304</option><option>Alumínio</option><option>Galvanizado</option><option>MDF</option></datalist>
   </div></details>
   <details class="sec" open><summary><span class="step">2</span>Modelos e cores</summary><div class="body">
-    <div class="msg">A cor identifica o modelo da peça e não muda com a espessura nem com o arquivo. O modelo pode ser criado antes de importar.</div>
-    <div class="pal" id="pal" role="group" aria-label="Paleta de cores"></div>
+    <div class="msg">A cor identifica o modelo da peça e não muda com a espessura nem com o arquivo. O modelo pode ser criado antes de importar. A cor é escolhida sozinha e nunca se repete entre modelos.</div>
     <label class="f">Nome do modelo<input id="setName" placeholder="Bacio de poltrona, Lateral, Travessa"></label>
     <div class="btns">
       <button type="button" id="newSet" style="flex-basis:100%">Criar modelo</button>
@@ -187,6 +186,8 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
       <label class="f chk"><input type="checkbox" id="fill" checked> Preencher furos das peças maiores</label></div></details>
     <button class="pri" id="go" type="button" disabled>Encaixar</button>
     <div class="msg" id="nmsg"></div>
+    <div class="btns"><button type="button" id="nestSave" disabled>Salvar encaixe</button><button type="button" id="nestOpen" disabled>Abrir salvo</button></div>
+    <div class="msg" id="nestInfo"></div>
   </div></details>
   <details class="sec" open><summary><span class="step">5</span>Exportar</summary><div class="body">
     <label class="f">Trabalho<input id="job" maxlength="120" placeholder="Nome do trabalho"></label>
@@ -244,7 +245,7 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
 const $=s=>document.querySelector(s);
 const PALETTE=['#ff6a1a','#4cc9f0','#7dce4a','#f7d154','#c792ea','#ff5d8f','#2dd4bf','#60a5fa','#fb923c','#f472b6','#a3e635','#e879f9'];
 const STORE='nest-presets-v1';
-const S={parts:[],groups:{},res:null,tab:null,file:'peças',uid:0,sets:[],forbid:[],paint:PALETTE[0],presetId:null,activePreset:null,snap:null,pdf:null,sheetMemory:{}};
+const S={parts:[],groups:{},res:null,tab:null,file:'peças',uid:0,sets:[],forbid:[],presetId:null,activePreset:null,snap:null,pdf:null,sheetMemory:{}};
 
 /* ---------- geometria ---------- */
 const area=p=>{let a=0;for(let i=0,n=p.length;i<n;i++){const q=p[(i+1)%n];a+=p[i][0]*q[1]-q[0]*p[i][1]}return a/2};
@@ -310,7 +311,7 @@ function addParts(list,mat,th,merge,x={}){
 
 /* ---------- importação ---------- */
 /* ---------- persistência no servidor (data/*.json) ---------- */
-S.store={rev:0,projects:[],models:[],presets:[],settings:{naming:'{projeto}_{material}_{espessura}MM_{seq}'}};S.projectId=null;S.files=[];S.seq={};S.setQty={};S.ready=false;
+S.store={rev:0,projects:[],models:[],presets:[],settings:{naming:'{projeto}_{material}_{espessura}MM_{seq}'}};S.projectId=null;S.files=[];S.seq={};S.setQty={};S.savedNest=null;S.ready=false;
 const sent={meta:'',models:'',proj:''};let saveT=null;
 function setSaved(t,k){const el=$('#saved');el.textContent=t;el.className='saved '+(k||'')}
 /* Rede caída vira mensagem clara em vez de "Failed to fetch". */
@@ -319,7 +320,7 @@ async function sfetch(url,opt){try{return await fetch(url,opt)}catch(e){setSaved
 async function api(path,body){const r=await sfetch(path,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});if(!r.ok){const e=Error(await r.text());e.status=r.status;throw e}return r.json()}
 function hist(kind,detail){api('/api/history',{kind,detail,project:S.projectId||''}).catch(()=>{})}
 const metaPatch=()=>({projects:S.store.projects,models:S.sets,presets:S.store.presets,settings:{...S.store.settings,forbid:S.forbid,mix:$('#mix').checked}});
-const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,parts:S.parts.map(({pick,...p})=>p)});
+const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,nest:S.savedNest,parts:S.parts.map(({pick,...p})=>p)});
 function autosave(){if(!S.ready)return;clearTimeout(saveT);saveT=setTimeout(()=>flush(),700);setSaved('gravando…')}
 async function flush(){
   if(!S.ready)return;clearTimeout(saveT);
@@ -342,10 +343,10 @@ function renderProj(){const L=S.store.projects;
 async function openProject(id){
   await flush();S.projectId=id||null;
   const d=id?await api('/api/project/'+id):{};
-  S.parts=(d.parts||[]).map(p=>({...p,pick:false}));S.files=d.files||[];S.seq=d.seq||{};S.uid=d.uid||0;S.groups=d.groups||{};S.setQty=d.setQty||{};
+  S.parts=(d.parts||[]).map(p=>({...p,pick:false}));S.files=d.files||[];S.seq=d.seq||{};S.uid=d.uid||0;S.groups=d.groups||{};S.setQty=d.setQty||{};S.savedNest=d.nest||null;
   S.res=null;S.snap=null;S.pdf=null;S.tab=null;sent.proj=JSON.stringify(projPayload());
   if(S.store.settings.last!==id){S.store.settings.last=id;autosave()}
-  renderProj();render()}
+  renderProj();render();if(S.savedNest&&openSavedNest(true))render()}
 $('#proj').onchange=e=>openProject(e.target.value).catch(x=>toast(x.message,'bad'));
 function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';$('#projModal').hidden=false;$('#pjCode').focus()}
 $('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>{$('#projModal').hidden=true};
@@ -523,6 +524,29 @@ function takeSnap(o,engine){
     iters:vals.reduce((s,v)=>s+(v.iters||0),0)
   };
 }
+/* ---------- encaixe salvo no projeto ---------- */
+/* Só posições são gravadas (peça, x, y, ângulo, espelho); o contorno é refeito a partir da peça ao abrir. */
+const nestSig=()=>{const G=groupsOf();return JSON.stringify([S.parts.filter(p=>p.on).map(p=>[p.id,p.qty,p.mat,p.th,p.mirror,p.rot,p.sig]),Object.keys(G).sort().map(k=>[k,(S.groups[k]||{}).w,(S.groups[k]||{}).h])])};
+function packNest(){const o={};for(const k in S.res){const g=S.res[k];o[k]={sheets:g.sheets.map(sh=>sh.placed.map(q=>({id:q.it.id,x:q.x,y:q.y,a:q.a,mi:q.mi?1:0}))),fail:(g.fail||[]).map(p=>p.id),failWhy:g.failWhy||[],ext:g.ext||null,workers:g.workers||null,iters:g.iters||0}}return o}
+function unpackNest(R){const byId=new Map(S.parts.map(p=>[p.id,p])),need=id=>{const it=byId.get(id);if(!it)throw Error('peça ausente');return it},o={};
+  for(const k in R){const g=R[k];o[k]={sheets:g.sheets.map(sh=>({placed:sh.map(q=>{const it=need(q.id),t=tf(it.rings,q.a,q.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:q.x,y:q.y,a:q.a,mi:q.mi}})})),fail:g.fail.map(need),failWhy:g.failWhy||[],ext:g.ext||undefined,workers:g.workers||undefined,iters:g.iters||0}}
+  return o}
+const savedNestStale=()=>!!S.savedNest&&S.savedNest.sig!==nestSig();
+function openSavedNest(quiet){
+  const n=S.savedNest;if(!n)return false;
+  if(savedNestStale()){if(!quiet)status('As peças ou as chapas mudaram depois que este encaixe foi salvo. Encaixe de novo e salve.',true);return false}
+  try{S.res=unpackNest(n.res)}catch(e){S.res=null;if(!quiet)status('Não foi possível abrir o encaixe salvo.',true);return false}
+  S.snap=JSON.parse(JSON.stringify(n.snap));S.tab=S.res[n.tab]?n.tab:Object.keys(S.res)[0];S.pdf=null;
+  $('#nmsg').className='msg ok';$('#nmsg').textContent='Encaixe salvo em '+whenLabel(n.savedAt)+' aberto.';
+  return true}
+$('#nestOpen').onclick=()=>{if(openSavedNest(false)){render();showResult()}};
+$('#nestSave').onclick=async()=>{
+  if(!S.res||!S.snap){status('Encaixe antes de salvar.',true);return}
+  if(!S.projectId){status('Selecione um projeto.',true);return}
+  if(S.savedNest&&!await ask('Este projeto já tem um encaixe salvo em '+whenLabel(S.savedNest.savedAt)+'. Substituir por este?','Substituir',false))return;
+  const sheets=Object.values(S.res).reduce((a,g)=>a+g.sheets.length,0);
+  S.savedNest={savedAt:new Date().toISOString(),sig:nestSig(),tab:S.tab,sheets,snap:JSON.parse(JSON.stringify(S.snap)),res:packNest()};
+  hist('nest.save',{sheets,groups:Object.keys(S.res)});render();await flush();status('Encaixe salvo no projeto.',false)};
 async function runNest(){
   const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),rules:currentRules()};
   const G0=groupsOf();
@@ -603,7 +627,7 @@ function applyPreset(preset){
   if(Number.isFinite(+preset.defTh)) $('#defTh').value=+preset.defTh;
   if(typeof preset.defMat==='string') $('#defMat').value=preset.defMat;
   $('#srv').checked=!!preset.srv;$('#fill').checked=preset.fill!==false;$('#mix').checked=preset.mix!==false;
-  S.sets=(preset.sets||[]).map((s,i)=>({id:String(s.id||nid('c')),name:String(s.name||('Conjunto '+(i+1))),color:hexColor(s.color,PALETTE[i%PALETTE.length]),isolate:!!s.isolate,together:!!s.together}));
+  S.sets=(preset.sets||[]).map((s,i)=>({id:String(s.id||nid('c')),name:String(s.name||('Conjunto '+(i+1))),color:hexColor(s.color,PALETTE[i%PALETTE.length]),isolate:!!s.isolate,together:!!s.together}));uniqueColors();
   const ids=new Set(S.sets.map(s=>s.id));
   S.forbid=(preset.forbid||[]).filter(p=>Array.isArray(p)&&ids.has(String(p[0]))&&ids.has(String(p[1]))&&String(p[0])!==String(p[1])).map(p=>[String(p[0]),String(p[1])]);
   S.sheetMemory={};
@@ -684,8 +708,17 @@ $('#presetDel').onclick=async()=>{
   if(S.activePreset&&S.activePreset.id===p.id)S.activePreset=null;
   S.presetId=null;renderPresets();presetMsg('Preset excluído.',false);
 };
-function renderPal(){$('#pal').innerHTML=PALETTE.map(c=>`<button type="button" class="${c===S.paint?'on':''}" style="background:${c}" data-c="${c}" aria-label="Cor ${c}" aria-pressed="${c===S.paint}"></button>`).join('')}
-$('#pal').onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;S.paint=b.dataset.c;renderPal()};
+/* Cor de modelo: automática e única. Primeiro a paleta; depois tons gerados, o mais longe possível dos já usados. */
+const hsl2hex=(h,sa,l)=>{sa/=100;l/=100;const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0')};return '#'+f(0)+f(8)+f(4)};
+const rgbOf=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const colorGap=(a,b)=>{const x=rgbOf(a),y=rgbOf(b);return Math.hypot(x[0]-y[0],x[1]-y[1],x[2]-y[2])};
+function nextColor(skip){
+  const used=S.sets.filter(x=>x!==skip).map(x=>String(x.color).toLowerCase());
+  const free=PALETTE.find(c=>!used.includes(c));if(free)return free;
+  for(let min=70;min>=0;min-=10)for(let k=0;k<360;k++){const c=hsl2hex(k*137.508%360,[70,55,85][k%3],[60,45,72][(k/3|0)%3]);if(!used.includes(c)&&used.every(u=>colorGap(u,c)>min))return c}
+  for(;;){const c='#'+Math.floor(Math.random()*0x1000000).toString(16).padStart(6,'0');if(!used.includes(c))return c}
+}
+function uniqueColors(){const seen=new Set();let n=0;for(const x of S.sets){if(seen.has(String(x.color).toLowerCase())){x.color=nextColor(x);n++}seen.add(String(x.color).toLowerCase())}return n}
 function picked(){return S.parts.filter(p=>p.pick)}
 /* Quantidade de modelos (por projeto): a quantidade de cada peça do modelo é a de um modelo × este número. */
 const setN=id=>Math.max(1,Math.round(+S.setQty[id])||1);
@@ -699,15 +732,14 @@ function setCount(id,v){
   S.res=null;S.snap=null;S.pdf=null;render();
   toast(odd?odd+' peça(s) não tinham quantidade múltipla de '+n+': valor arredondado, confira.':m+' × '+s.name+': quantidades das peças atualizadas.',odd?'bad':'ok');
 }
-function updateColorButtons(){const n=picked().length;$('#applyColor').disabled=!n;$('#clearGroup').disabled=!n;$('#delPicked').disabled=!n;$('#delPicked').textContent=n?'Excluir marcadas ('+n+')':'Excluir marcadas';$('#selInfo').textContent=n?n+' peça(s) marcada(s) para cor.':'Marque peças na lista para aplicar uma cor.'}
+function updateColorButtons(){const n=picked().length;$('#applyColor').disabled=!n;$('#clearGroup').disabled=!n;$('#delPicked').disabled=!n;$('#delPicked').textContent=n?'Excluir marcadas ('+n+')':'Excluir marcadas';$('#selInfo').textContent=n?n+' peça(s) marcada(s).':'Marque peças na lista para colocá-las em um modelo.'}
 $('#applyColor').onclick=async()=>{
   const parts=picked();if(!parts.length){toast('Marque ao menos uma peça.','bad');return}
-  const name=$('#setName').value.trim(),color=S.paint;
-  if(!name){for(const p of parts){p.color=color;moveToSet(p,'')}toast('Cor aplicada nas peças marcadas, sem conjunto.','ok')}
-  else{let s=S.sets.find(x=>x.name.toLowerCase()===name.toLowerCase());
-    if(!s){s={id:nid('c'),name,color,isolate:false,together:false};S.sets.push(s)}
-    else if(s.color!==color){if(!await ask('O conjunto "'+s.name+'" já existe. Trocar a cor de todas as peças deste conjunto?','Trocar cor',false))return;s.color=color}
-    for(const p of parts)moveToSet(p,s.id);toast('Peças no conjunto '+s.name+'.','ok')}
+  const name=$('#setName').value.trim();
+  if(!name){toast('Dê um nome ao modelo para receber as peças marcadas.','bad');$('#setName').focus();return}
+  let st=S.sets.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!st){st={id:nid('c'),name,color:nextColor(),isolate:false,together:false};S.sets.push(st)}
+  for(const p of parts)moveToSet(p,st.id);toast('Peças no modelo '+st.name+'.','ok');
   if(rulesActive()){S.res=null;S.snap=null;S.pdf=null}
   render();
 };
@@ -715,9 +747,8 @@ $('#newSet').onclick=()=>{
   const name=$('#setName').value.trim();
   if(!name){toast('Dê um nome ao modelo.','bad');$('#setName').focus();return}
   if(S.sets.some(x=>x.name.toLowerCase()===name.toLowerCase())){toast('Já existe um modelo com esse nome.','bad');return}
-  S.sets.push({id:nid('c'),name,color:S.paint,isolate:false,together:false});
-  $('#setName').value='';S.paint=PALETTE.find(c=>!S.sets.some(x=>x.color===c))||S.paint;
-  renderPal();render();toast('Modelo '+name+' criado.','ok');
+  S.sets.push({id:nid('c'),name,color:nextColor(),isolate:false,together:false});
+  $('#setName').value='';render();toast('Modelo '+name+' criado.','ok');
 };
 $('#setName').addEventListener('keydown',e=>{if(e.key==='Enter'&&!picked().length){e.preventDefault();$('#newSet').click()}});
 $('#clearGroup').onclick=()=>{
@@ -800,7 +831,7 @@ function renderLegend(){
     const parts=S.parts.filter(p=>p.groupId===s.id);
     const q=parts.reduce((a,p)=>a+(p.on?p.qty:0),0);
     return `<div class="setcard"><div class="top"><input type="color" value="${s.color}" data-set="${esc(s.id)}" data-set-f="color" aria-label="Cor de ${esc(s.name)}"><input type="text" value="${esc(s.name)}" data-set="${esc(s.id)}" data-set-f="name" aria-label="Nome do conjunto" maxlength="60"></div><label class="f">Quantidade de modelos<input type="number" min="1" step="1" value="${setN(s.id)}" data-set="${esc(s.id)}" data-set-f="count" aria-label="Quantidade de modelos ${esc(s.name)}"></label><div class="m">${q} un · ${parts.length?esc(parts.map(p=>p.name+' ×'+p.qty).join(', ')):'nenhuma peça neste projeto'}</div><div class="btns"><button type="button" data-del-set-parts="${esc(s.id)}" ${parts.length?'':'disabled'}>Excluir peças</button><button type="button" data-del-set="${esc(s.id)}" aria-label="Excluir modelo ${esc(s.name)}">Excluir modelo</button></div><div class="flags"><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="isolate" ${s.isolate?'checked':''}> Fabricar em chapas separadas</label><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="together" ${s.together?'checked':''}> Manter na mesma chapa</label></div></div>`;
-  }).join('')||'<div class="msg">Nenhum modelo criado. Escolha uma cor, dê um nome e clique em Criar modelo.</div>';
+  }).join('')||'<div class="msg">Nenhum modelo criado. Dê um nome e clique em Criar modelo.</div>';
   const opts=S.sets.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   $('#fa').innerHTML=opts;$('#fb').innerHTML=opts;$('#forbidAdd').disabled=S.sets.length<2;
   $('#forbids').innerHTML=S.forbid.map((p,i)=>{const A=S.sets.find(s=>s.id===p[0]),B=S.sets.find(s=>s.id===p[1]);if(!A||!B)return '';return `<div class="pair"><span><i class="sw" style="background:${A.color}"></i>${esc(A.name)} × <i class="sw" style="background:${B.color}"></i>${esc(B.name)}</span><button type="button" data-unforbid="${i}">Tirar</button></div>`}).join('');
@@ -835,6 +866,8 @@ function renderCore(){
   const ready=!!(R&&S.snap);
   ['xsvg','xdxf','xdwg','xall','xeps','xepsall','pdfPrev','pdfGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
+  const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
+  $('#nestInfo').className='msg'+(old?' w':'');$('#nestInfo').textContent=sv?'Encaixe salvo em '+whenLabel(sv.savedAt)+' · '+sv.sheets+' chapa(s).'+(old?' As peças ou chapas mudaram desde então: ele não pode mais ser aberto.':''):'Nenhum encaixe salvo neste projeto.';
   if(!R){$('#kpi').textContent=S.parts.length?'pronto para encaixar':'sem peças';if(!S.parts.length)$('#stage').innerHTML='<div class="empty">Importe um arquivo para começar.<br>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div>';else $('#stage').innerHTML='<div class="empty">Ajuste material, espessura e quantidade e clique em <b>&nbsp;Encaixar</b>.</div>';return}
   const gr=R[S.tab],g=S.groups[S.tab];let tot=0,ar=0,ns=0;Object.keys(R).forEach(k=>{ns+=R[k].sheets.length;const gg=S.groups[k];ar+=R[k].sheets.length*gg.w*gg.h;tot+=used(R[k])});
   $('#kpi').innerHTML=ns?`<b>${ns}</b> chapa${ns>1?'s':''} · aproveitamento <b>${(tot/ar*100).toFixed(1)}%</b>`:`<b>0</b> chapas · nada encaixado`;
@@ -864,7 +897,7 @@ document.addEventListener('change',e=>{
   if(t.dataset.set){const s=S.sets.find(x=>x.id===t.dataset.set);if(!s)return;const f=t.dataset.setF;
     if(f==='name'){s.name=t.value;render();return}
     if(f==='count'){setCount(s.id,t.value);return}
-    if(f==='color') s.color=hexColor(t.value,s.color);
+    if(f==='color'){const c=hexColor(t.value,s.color).toLowerCase();if(S.sets.some(x=>x!==s&&String(x.color).toLowerCase()===c)){toast('Essa cor já é de outro modelo. Cada modelo tem a sua.','bad');render();return}s.color=c}
     if(f==='isolate') s.isolate=t.checked;
     if(f==='together') s.together=t.checked;
     if(f==='isolate'||f==='together'){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Regra alterada. Encaixe de novo para valer no cálculo.'}
@@ -1237,7 +1270,7 @@ $('#xdwg').onclick=async()=>{
   try{for(const[i,c]of list.entries()){const r=await sfetch('/api/dxf-dwg',{method:'POST',body:dxfSheets([c])});if(!r.ok){status(await r.text(),true);return}dl(`${nm()}_chapa${i+1}.dwg`,await r.blob(),'application/acad')}
     status(list.length+' DWG gerado(s).',false)}
   catch(e){status(e.message,true)}};
-renderPal();renderPresets();render();
+renderPresets();render();
 /* ---------- exportação EPS ---------- */
 const plain=t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const nameFrom=(pat,ctx)=>safeName(plain(pat.replace(/\{(\w+)\}/g,(_,k)=>ctx[k]==null?'':ctx[k])).replace(/\s+/g,'_').replace(/_{2,}/g,'_'));
@@ -1277,7 +1310,7 @@ $('#namePat').addEventListener('change',()=>{S.store.settings.naming=$('#namePat
     const d=await api('/api/store');S.store={...S.store,...d};
     S.sets=(d.models||[]).map((s,i)=>({id:String(s.id),name:String(s.name||'Modelo '+(i+1)),color:hexColor(s.color,PALETTE[i%PALETTE.length]),isolate:!!s.isolate,together:!!s.together}));
     const ids=new Set(S.sets.map(s=>s.id));S.forbid=(Array.isArray(d.settings&&d.settings.forbid)?d.settings.forbid:[]).filter(p=>Array.isArray(p)&&ids.has(p[0])&&ids.has(p[1])&&p[0]!==p[1]).map(p=>[p[0],p[1]]);$('#mix').checked=!(d.settings&&d.settings.mix===false);
-    sent.meta=JSON.stringify(metaPatch());sent.models=JSON.stringify(S.sets);
+    sent.meta=JSON.stringify(metaPatch());sent.models=JSON.stringify(S.sets);uniqueColors();
     let migrated=false;
     try{const old=JSON.parse(localStorage.getItem(STORE)||'{}').presets;if(Array.isArray(old)&&old.length&&!S.store.presets.length){S.store.presets=old;migrated=true}}catch(e){}
     $('#namePat').value=S.store.settings.naming;S.ready=true;renderPresets();
