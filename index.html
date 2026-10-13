@@ -9,6 +9,7 @@
 --r:8px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;
 --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;--sans:"Bahnschrift","Segoe UI Variable","Segoe UI",system-ui,sans-serif;color-scheme:dark}
 @media(prefers-color-scheme:light){:root{--bg:#eceae4;--p1:#f7f6f2;--p2:#fff;--p3:#efede6;--ln:#d3d0c7;--tx:#1a1c20;--mu:#5f6673;--ac:#e24e00;--ac2:#b53b00;--warn:#9a6b00;color-scheme:light}}
+[hidden]{display:none!important}
 *{box-sizing:border-box;margin:0}html,body{height:100%}
 body{background:var(--bg);color:var(--tx);font:13px/1.45 var(--sans);display:grid;grid-template-rows:52px 1fr;overflow:hidden}
 header{display:flex;align-items:center;gap:var(--s3);padding:0 var(--s4);border-bottom:1px solid var(--ln);background:var(--p1)}
@@ -29,6 +30,11 @@ aside.l{border-right:1px solid var(--ln)}aside.r{border-left:1px solid var(--ln)
 .step{width:20px;height:20px;border-radius:50%;background:var(--p3);border:1px solid var(--ln);display:grid;place-items:center;font:600 11px var(--mono);color:var(--mu);flex:0 0 auto}
 .sec[open]>summary .step,.sec.go .step{background:var(--ac);border-color:var(--ac);color:#140900}
 .sec .cnt{font:11px var(--mono);color:var(--mu);font-weight:400}
+/* Seções recolhidas dentro de um painel: seta e realce para ficar claro que abrem ao clicar. */
+details:not(.sec)>summary.sub{list-style:none;justify-content:flex-start;gap:6px;padding:6px 8px;border:1px solid var(--ln);border-radius:6px;color:var(--tx)}
+details:not(.sec)>summary.sub::-webkit-details-marker{display:none}
+details:not(.sec)>summary.sub::before{content:"▸";color:var(--ac)}details[open]:not(.sec)>summary.sub::before{content:"▾"}
+details:not(.sec)>summary.sub:hover{border-color:var(--ac)}
 .sub{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);font-weight:600;display:flex;justify-content:space-between;gap:var(--s2)}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--p3);border:1px solid var(--ln);border-radius:6px;padding:6px 10px;cursor:pointer}
@@ -179,13 +185,13 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
       <label class="f">Margem da chapa (mm)<input id="mar" type="number" value="5" step="1" min="0"></label>
     </div>
     <label class="f">Rotação<select id="rot"><option value="-1" selected>Livre 360° (máx. aproveitamento)</option><option value="90">0 / 90 / 180 / 270</option><option value="180">0 / 180</option><option value="30">Passo de 30°</option><option value="15">Passo de 15°</option><option value="0">Sem girar</option></select></label>
+    <label class="f">Tempo de otimização<select id="secsPick"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option><option value="600">10 min</option><option value="1200">20 min</option><option value="1800">30 min</option><option value="">Outro…</option></select><input type="hidden" id="secs" value="30"></label>
+    <label class="f" id="secsBox" hidden>Tempo em minutos<input id="secsMin" type="number" min="0.1" max="120" step="0.5" value="45"></label>
+    <div class="msg">Mais tempo testa mais arranjos e costuma economizar chapa. Dá para parar antes e ficar com o melhor até ali.</div>
     <details><summary class="sub" style="cursor:pointer">Opções avançadas</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
       <div class="row">
         <label class="f">Resolução (mm)<select id="res"><option value="1">1 · máximo</option><option value="2" selected>2 · preciso</option><option value="3">3 · equilibrado</option><option value="5">5 · rápido</option></select></label>
-        <label class="f">Tempo de otimização<select id="secsPick"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option><option value="600">10 min</option><option value="1200">20 min</option><option value="1800">30 min</option><option value="">Outro…</option></select><input type="hidden" id="secs" value="30"></label>
       </div>
-      <label class="f" id="secsBox" hidden>Tempo em minutos<input id="secsMin" type="number" min="0.1" max="120" step="0.5" value="45"></label>
-      <div class="msg">Mais tempo testa mais arranjos e costuma economizar chapa. Dá para parar antes e ficar com o melhor até ali.</div>
       <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (Rust, melhor aproveitamento)</label>
       <label class="f chk"><input type="checkbox" id="fill" checked> Encaixar peças dentro dos furos das maiores</label></div></details>
     <div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div>
