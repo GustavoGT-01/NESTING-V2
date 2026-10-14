@@ -83,17 +83,28 @@ Tudo fica na pasta `data/`, que **não vai para o repositório**:
 - `store.json`: projetos, modelos e cores, presets, regras, histórico e exportações.
 - `project_<id>.json`: peças, arquivos de origem e contadores de sequência de cada projeto.
 
-A gravação é atômica e mantém uma cópia `.bak`. Um arquivo corrompido é preservado ao lado, nunca apagado. Faça cópia da pasta `data/` para ter backup.
+A gravação é atômica e mantém uma cópia `.bak`. Um arquivo corrompido é preservado ao lado, nunca apagado, e o `.bak` válido volta a ser o arquivo principal. Se os dois estiverem ruins, a página mostra erro em vez de abrir vazia.
+
+- Cada projeto tem uma revisão (`rev`): se duas janelas editam o mesmo projeto, a que gravar com a versão antiga recebe aviso e precisa recarregar, em vez de apagar o que a outra fez.
+- Backup automático: ao ligar, o servidor copia os arquivos de `data/` para `data/backups/AAAA-MM-DD/` (uma vez por dia, guarda os 14 mais recentes). Para restaurar: feche o servidor, copie os arquivos da pasta do dia desejado de volta para `data/` e ligue de novo.
+
+## Segurança
+
+O servidor só atende em `127.0.0.1` e só serve a página (`/` e `/index.html`) e a API. Ele recusa pedidos com `Host` diferente de `127.0.0.1:8080`/`localhost:8080` e gravações vindas de outros sites (cabeçalho `Origin`), o que impede uma página aberta no navegador de ler ou apagar os projetos. Abra sempre por `http://127.0.0.1:8080`. Só um servidor pode usar a porta: um segundo `iniciar.bat` avisa e fecha.
 
 ## Testes
 
 ```bash
-python -m unittest discover -s tests -t .
+py -3 -m unittest discover -s tests
 ```
 
-São 22 testes do servidor (gravação de dados e EPS).
+São 44 testes: gravação de dados, EPS, segurança do servidor, limites do encaixe e paridade entre o motor Python e o compilado (este pula se `motor.exe` não existir).
 
-Há também um teste de fluxo completo em `tests/e2e_jsdom.js`, que precisa do Node.js com o pacote `jsdom`. O caminho do projeto está fixo no topo desse arquivo e precisa ser ajustado antes de rodar.
+Há também um teste de fluxo completo em `tests/e2e_jsdom.js`, que precisa do Node.js com o pacote `jsdom` instalado em qualquer pasta (`npm i jsdom` e `NODE_PATH` apontando para o `node_modules` dela):
+
+```bash
+node tests/e2e_jsdom.js
+```
 
 ## Medir o aproveitamento
 

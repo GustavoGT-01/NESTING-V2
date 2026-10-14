@@ -6,7 +6,9 @@ import json
 import multiprocessing
 import os
 import shutil
+import socket
 import subprocess
+import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -19,6 +21,11 @@ import store
 ROOT = Path(__file__).resolve().parent
 HOST = "127.0.0.1"
 PORT = 8080
+MAX_BODY = 100 * 1024 * 1024  # maior corpo de POST aceito (DWG grande cabe folgado)
+CSP = (
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+)
 WORKERS = max(1, int(os.environ.get("NEST_WORKERS", "0") or 0) or (os.cpu_count() or 1))
 POOL = None
 
@@ -117,10 +124,41 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         # A página muda entre versões: o navegador não deve reaproveitar uma cópia antiga.
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Content-Security-Policy", CSP)
         super().end_headers()
 
+    def _local(self) -> set:
+        port = self.server.server_address[1]
+        return {"127.0.0.1:%d" % port, "localhost:%d" % port}
+
+    def _host_ok(self) -> bool:
+        # Host estranho = outro site apontando um domínio para 127.0.0.1 (DNS rebinding)
+        host = self.headers.get("Host")
+        if host is None or host in self._local():
+            return True
+        self._fail(421, "Host não aceito.")
+        return False
+
+    def _static(self) -> bool:
+        # só a página é servida; dados, código e .git ficam de fora
+        if self.path.split("?", 1)[0] in ("/", "/index.html"):
+            self.path = "/index.html"
+            return True
+        self.send_error(404)
+        return False
+
+    def do_HEAD(self):
+        if self._host_ok() and self._static():
+            super().do_HEAD()
+
     def _json(self, obj, status: int = 200) -> None:
-        raw = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        try:
+            raw = json.dumps(obj, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except (TypeError, ValueError):
+            return self._fail(500, "resposta inválida (número não finito ou tipo não serializável)")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
@@ -128,16 +166,21 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
+        if not self._host_ok():
+            return
         path = self.path.split("?", 1)[0]
-        if path in ("/", ""):
-            self.path = "/index.html"
-        elif path == "/api/store":
-            return self._json(store.load())
+        if path == "/api/store":
+            try:
+                return self._json(store.load())
+            except ValueError as exc:  # dados corrompidos sem cópia: avisa em vez de mostrar vazio
+                return self._fail(500, str(exc))
         elif path.startswith("/api/project/"):
             try:
                 return self._json(store.load_project(path.rsplit("/", 1)[1]))
             except store.BadId as exc:
                 return self._fail(400, str(exc))
+            except ValueError as exc:
+                return self._fail(500, str(exc))
         elif path.startswith("/api/nest/poll/"):
             job = engine.get(path.rsplit("/", 1)[1])
             if job is None:
@@ -145,12 +188,13 @@ class Handler(SimpleHTTPRequestHandler):
             query = self.path.partition("?")[2]
             rev = next((v for k, _, v in (p.partition("=") for p in query.split("&")) if k == "rev"), "")
             return self._json(job.status(int(rev) if rev.lstrip("-").isdigit() else -1))
-        elif path.startswith("/data") or path.endswith((".py", ".bak", ".tmp")):
-            return self.send_error(404)  # dados e código não são servidos pela página
-        return super().do_GET()
+        if self._static():
+            super().do_GET()
 
     def _fail(self, status: int, message: str) -> None:
         body = message.encode("utf-8")
+        if status >= 400:
+            self.close_connection = True  # o corpo do pedido pode ter ficado sem ler
         self.send_response(status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -158,8 +202,20 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if not self._host_ok():
+            return
+        origin = self.headers.get("Origin")
+        if origin is not None and origin not in {"http://" + h for h in self._local()}:
+            return self._fail(403, "Origem não aceita.")  # outro site postando no servidor local
+        try:
+            length = int(self.headers.get("Content-Length"))
+        except (TypeError, ValueError):
+            length = -1
+        if length < 0:
+            return self._fail(400, "Content-Length ausente ou inválido.")
+        if length > MAX_BODY:
+            return self._fail(413, "Arquivo grande demais.")
         path = self.path.split("?", 1)[0]
-        length = int(self.headers.get("Content-Length", "0") or 0)
         data = self.rfile.read(length) if length else b""
         if path == "/api/dwg":
             name = self.headers.get("X-Filename", "peca.dwg")
@@ -180,6 +236,8 @@ class Handler(SimpleHTTPRequestHandler):
             # encaixe como tarefa: a página acompanha a prévia por /api/nest/poll/<id>
             try:
                 self._json({"id": engine.start(json.loads(data.decode("utf-8")), POOL, WORKERS).id})
+            except engine.Busy as exc:
+                self._fail(429, str(exc))
             except Exception as exc:
                 self._fail(400, "Falha no encaixe: %s" % exc)
             return
@@ -202,8 +260,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         elif path.startswith("/api/project/"):
             try:
-                store.save_project(path.rsplit("/", 1)[1], json.loads(data.decode("utf-8")))
-                self._json({"ok": True})
+                rev = store.save_project(path.rsplit("/", 1)[1], json.loads(data.decode("utf-8")))
+                self._json(dict(ok=True, rev=rev) if isinstance(rev, int) else {"ok": True})
+            except store.Conflict as exc:
+                self._fail(409, str(exc))
             except Exception as exc:
                 self._fail(400, "Falha ao gravar o projeto: %s" % exc)
             return
@@ -249,12 +309,31 @@ class Handler(SimpleHTTPRequestHandler):
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))
 
 
+class Server(ThreadingHTTPServer):
+    # Sem reaproveitar a porta: no Windows um segundo servidor ligaria na mesma porta sem erro.
+    allow_reuse_address = False
+    allow_reuse_port = False
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def main() -> None:
     global POOL
     os.chdir(ROOT)
-    POOL = ProcessPoolExecutor(max_workers=WORKERS)
+    try:
+        server = Server((HOST, PORT), Handler)
+    except OSError:
+        print(f"Já existe um servidor na porta {PORT}: use a janela aberta ou feche-a")
+        sys.exit(1)
+    try:
+        store.snapshot()
+    except Exception as exc:  # backup nunca impede o servidor de subir
+        print("Aviso: backup diário dos dados falhou: %s" % exc)
+    POOL =ProcessPoolExecutor(max_workers=WORKERS)
     print(f"Encaixe: {WORKERS} núcleos do processador em uso.")
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Aberto em http://{HOST}:{PORT}")
     print("Motor de encaixe: compilado (Rust)." if engine.find_motor() else "Motor de encaixe: Python (o compilado não foi encontrado).")
     if find_oda():

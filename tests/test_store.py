@@ -1,4 +1,5 @@
 import json, os, sys, tempfile, threading, unittest, urllib.request, urllib.error
+from unittest import mock
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ["NEST_DATA"] = tempfile.mkdtemp(prefix="nest-test-")
@@ -66,6 +67,96 @@ class StoreTests(unittest.TestCase):
         store.save({"models": []}, 0)
         self.assertFalse(list(self.d.glob("*.tmp")))
 
+    def test_patch_with_wrong_types_rejected(self):
+        for patch in ({"projects": "x"}, {"models": {}}, {"settings": []}):
+            with self.assertRaises(ValueError):
+                store.save(patch, store.load()["rev"])
+        self.assertEqual(store.load()["projects"], [])
+
+    def test_project_must_be_object_with_lists(self):
+        for bad in ([1, 2], {"parts": "x"}, {"files": {}}):
+            with self.assertRaises(ValueError):
+                store.save_project("p1", bad)
+
+    def test_project_rev_conflict_and_legacy(self):
+        self.assertEqual(store.load_project("p1")["rev"], 0)
+        self.assertEqual(store.save_project("p1", {"parts": [1]}), 1)   # sem rev: aceito
+        self.assertEqual(store.save_project("p1", {"parts": [2], "rev": 1}), 2)
+        with self.assertRaises(store.Conflict):
+            store.save_project("p1", {"parts": [3], "rev": 1})
+        doc = store.load_project("p1")
+        self.assertEqual((doc["parts"], doc["rev"]), ([2], 2))
+
+    def test_exports_are_capped(self):
+        doc = store.empty()
+        doc["exports"] = [{"kind": "export"}] * store.EXPORTS_MAX
+        store._write(doc)
+        store.log("export", {"file": "ultimo.eps"})
+        ex = store.load()["exports"]
+        self.assertEqual(len(ex), store.EXPORTS_MAX)
+        self.assertEqual(ex[-1]["detail"]["file"], "ultimo.eps")
+
+    def test_big_or_bad_detail_rejected(self):
+        with self.assertRaises(ValueError):
+            store.log("export", {"x": "a" * 20001})
+        with self.assertRaises(ValueError):
+            store.log("export", [1])
+        store.log("nota", "texto curto")
+        self.assertEqual(len(store.load()["history"]), 1)
+
+    def test_recovered_backup_is_promoted(self):
+        store.save({"models": [{"id": "x"}]}, 0)
+        store.save({"models": [{"id": "y"}]}, 1)
+        (self.d / "store.json").write_text("{quebrado", encoding="utf-8")
+        first, second = store.load(), store.load()   # 2ª leitura não pode cair em vazio
+        self.assertEqual(second["models"], [{"id": "x"}])
+        self.assertEqual(second["rev"], first["rev"])
+        with self.assertRaises(store.Conflict):
+            store.save({"models": []}, 0)            # rev 0 antigo não passa mais
+        self.assertEqual(store.load()["models"], [{"id": "x"}])
+
+    def test_both_corrupt_raises_not_empty(self):
+        store.save({"models": [{"id": "x"}]}, 0)
+        store.save({"models": [{"id": "y"}]}, 1)
+        for name in ("store.json", "store.json.bak"):
+            (self.d / name).write_text("{quebrado", encoding="utf-8")
+        for _ in range(2):
+            with self.assertRaises(ValueError):
+                store.load()
+        with self.assertRaises(ValueError):
+            store.save({"models": []}, 0)
+        self.assertEqual(store.load_project("novo")["parts"], [])  # projeto inexistente: padrão vazio
+
+    def test_replace_retries_on_permission_error(self):
+        real, calls = os.replace, []
+        def flaky(src, dst):
+            calls.append(src)
+            if len(calls) < 3:
+                raise PermissionError(5, "Acesso negado")
+            real(src, dst)
+        with mock.patch("store.os.replace", flaky):
+            store.save({"models": [{"id": "z"}]}, 0)
+        self.assertEqual(store.load()["models"], [{"id": "z"}])
+        with mock.patch("store.os.replace", side_effect=PermissionError(5, "Acesso negado")):
+            with self.assertRaises(PermissionError):
+                store.save({"models": []}, 1)
+        self.assertFalse(list(self.d.glob("*.tmp")))
+        self.assertEqual(store.load()["models"], [{"id": "z"}])
+
+    def test_snapshot_daily_and_prunes(self):
+        store.save({"models": [{"id": "m"}]}, 0)
+        root = self.d / "backups"
+        for i in range(1, 17):
+            (root / ("2000-01-%02d" % i)).mkdir(parents=True)
+        day = store.snapshot(keep=14)
+        self.assertTrue((day / "store.json").exists())
+        self.assertIsNone(store.snapshot(keep=14))       # já feito hoje
+        days = sorted(p.name for p in root.iterdir())
+        self.assertEqual(len(days), 14)
+        self.assertIn(day.name, days)
+        self.assertNotIn("2000-01-01", days)
+        self.assertEqual(store.load()["models"], [{"id": "m"}])  # load segue no topo de data/
+
 
 class ServerTests(unittest.TestCase):
     @classmethod
@@ -101,6 +192,30 @@ class ServerTests(unittest.TestCase):
         for p in ("/data/store.json", "/server.py", "/store.py"):
             st, _ = self.call(p)
             self.assertEqual(st, 404, p)
+
+    def test_project_stale_rev_gets_409(self):
+        st, body = self.call("/api/project/h1", {"parts": []})
+        self.assertEqual((st, body["rev"]), (200, 1))
+        st, body = self.call("/api/project/h1", {"parts": [1], "rev": 1})
+        self.assertEqual((st, body["rev"]), (200, 2))
+        st, _ = self.call("/api/project/h1", {"parts": [2], "rev": 1})
+        self.assertEqual(st, 409)
+        st, _ = self.call("/api/project/h1", [1])
+        self.assertEqual(st, 400)
+        st, _ = self.call("/api/store", {"rev": self.call("/api/store")[1]["rev"], "patch": {"projects": "x"}})
+        self.assertEqual(st, 400)
+
+    def test_corrupt_store_gets_500(self):
+        d = Path(os.environ["NEST_DATA"])
+        self.call("/api/store", {"rev": self.call("/api/store")[1]["rev"], "patch": {"models": []}})
+        for name in ("store.json", "store.json.bak"):
+            (d / name).write_text("{quebrado", encoding="utf-8")
+        try:
+            st, _ = self.call("/api/store")
+            self.assertEqual(st, 500)
+        finally:
+            for name in ("store.json", "store.json.bak"):
+                (d / name).unlink()
 
     def test_bad_project_id_rejected(self):
         st, _ = self.call("/api/project/..%2fstore", {"parts": []})

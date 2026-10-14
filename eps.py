@@ -65,7 +65,6 @@ def build_eps(sheet: dict, title: str = "Encaixe", use_colors: bool = False, fra
     ]
     if frame:
         out += ["0.5 setgray", "0 0 m %s 0 l %s %s l 0 %s l h stroke" % (_num(W), _num(W), _num(H), _num(H))]
-    cutcount = 0
     for part in sheet.get("parts", []):
         r, g, b = _hex_rgb(part.get("color")) if use_colors else (0.0, 0.0, 0.0)
         out.append("%s %s %s setrgbcolor" % (_num(r), _num(g), _num(b)))
@@ -78,7 +77,6 @@ def build_eps(sheet: dict, title: str = "Encaixe", use_colors: bool = False, fra
             for x, y in pts[1:]:
                 out.append("%s %s l" % (_num(x), _num(y)))
             out.append("h")
-            cutcount += 1
         out.append("stroke")
     out += ["showpage", "%%Trailer", "%%EOF", ""]
     return "\n".join(out)

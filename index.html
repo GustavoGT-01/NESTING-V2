@@ -388,7 +388,6 @@ function arcPts(cx,cy,r,a0,a1,ccw=true){let d=a1-a0;if(ccw){while(d<=0)d+=360}el
 function bulgePts(a,b,bu){const dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy);if(!d||!bu)return[a,b];
   const th=4*Math.atan(bu),r=d/2/Math.sin(th/2),mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,h=r*Math.cos(th/2),cx=mx-dy/d*h,cy=my+dx/d*h;
   const a0=Math.atan2(a[1]-cy,a[0]-cx),n=Math.max(2,Math.ceil(Math.abs(th)/0.1)),o=[];for(let i=0;i<=n;i++){const t=a0+th*i/n;o.push([cx+Math.abs(r)*Math.cos(t),cy+Math.abs(r)*Math.sin(t)])}return o}
-function centroid(ring){let a=0,x=0,y=0;for(let i=0;i<ring.length;i++){const p=ring[i],q=ring[(i+1)%ring.length],c=p[0]*q[1]-q[0]*p[1];a+=c;x+=(p[0]+q[0])*c;y+=(p[1]+q[1])*c}a*=0.5;if(Math.abs(a)<1e-6)return[ring[0][0],ring[0][1]];return[x/(6*a),y/(6*a)]}
 
 /* ---------- leitura ---------- */
 function parseDXF(txt,unitSel){
@@ -454,16 +453,28 @@ function hist(kind,detail){api('/api/history',{kind,detail,project:S.projectId||
 const metaPatch=()=>({projects:S.store.projects,models:S.sets,presets:S.store.presets,settings:{...S.store.settings,forbid:S.forbid,mix:$('#mix').checked}});
 const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,nest:S.savedNest,...(S.links.length?{links:S.links}:{}),parts:S.parts.filter(p=>!p.guest).map(({pick,guest,...p})=>p)});
 function autosave(){if(!S.ready)return;clearTimeout(saveT);saveT=setTimeout(()=>flush(),700);setSaved('gravando…')}
-async function flush(){
-  if(!S.ready)return;clearTimeout(saveT);
+/* Uma gravação por vez: quem chega durante uma espera por ela e grava de novo se ainda houver diferença (senão o rev do servidor dá 409). */
+let flushP=null;
+function flush(){if(flushP)return flushP.then(flush);flushP=flush0().finally(()=>{flushP=null});return flushP}
+/* rev vai só no corpo enviado; sent.proj fica sem ele, senão cada gravação geraria outra. */
+const projBody=(p,rev)=>JSON.stringify({...JSON.parse(p),rev:rev||0});
+async function flush0(){
+  if(!S.ready)return;clearTimeout(saveT);saveT=null;
+  const m=JSON.stringify(metaPatch()),pid=S.projectId,p=pid?JSON.stringify(projPayload()):'',prev=S.projRev;
   try{
-    const m=JSON.stringify(metaPatch());
     if(m!==sent.meta){const r=await api('/api/store',{rev:S.store.rev,patch:JSON.parse(m)});S.store.rev=r.rev;sent.meta=m;
       const mm=JSON.stringify(S.sets);if(mm!==sent.models){if(sent.models)hist('models.update',{models:S.sets.map(s=>({id:s.id,name:s.name,color:s.color}))});sent.models=mm}}
-    if(S.projectId){const p=JSON.stringify(projPayload());if(p!==sent.proj){await api('/api/project/'+S.projectId,JSON.parse(p));sent.proj=p}}
+    if(pid&&p!==sent.proj){const r=await api('/api/project/'+pid,JSON.parse(projBody(p,prev)));if(S.projectId===pid){sent.proj=p;if(r&&Number.isInteger(r.rev))S.projRev=r.rev}}
     setSaved('salvo '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),'ok');
   }catch(e){if(e.status===409){S.ready=false;setSaved('dados alterados em outra janela: recarregue','bad');toast(e.message,'bad')}else setSaved('falha ao gravar','bad')}}
-window.addEventListener('beforeunload',()=>{if(S.ready&&S.projectId)navigator.sendBeacon&&0});
+/* Fechar com algo por gravar: dispara a gravação (keepalive sobrevive ao fechamento) e pede confirmação. */
+/* Saída da página: o aviso só adianta a gravação; o envio de última hora fica para o pagehide, quando a página sai de fato
+   (gravar no aviso e o usuário ficar deixava rev e sent desatualizados: 409 falso na edição seguinte). */
+const pending=()=>{if(!S.ready)return null;const m=JSON.stringify(metaPatch()),p=S.projectId?JSON.stringify(projPayload()):sent.proj;return flushP||m!==sent.meta||p!==sent.proj?{m,p}:null};
+window.addEventListener('beforeunload',e=>{if(!pending())return;flush();e.preventDefault();e.returnValue=''});
+window.addEventListener('pagehide',()=>{const d=pending();if(!d)return;
+  if(d.m!==sent.meta)fetch('/api/store',{method:'POST',keepalive:true,body:JSON.stringify({rev:S.store.rev,patch:JSON.parse(d.m)})}).catch(()=>{});
+  if(d.p!==sent.proj)fetch('/api/project/'+S.projectId,{method:'POST',keepalive:true,body:projBody(d.p,S.projRev)}).catch(()=>{})});
 
 /* ---------- projetos ---------- */
 const curProj=()=>S.store.projects.find(p=>p.id===S.projectId)||null;
@@ -472,12 +483,19 @@ function renderProj(){const L=S.store.projects;
   $('#proj').innerHTML=L.length?L.map(p=>`<option value="${esc(p.id)}" ${p.id===S.projectId?'selected':''}>${esc(p.code)} · ${esc(p.product)}</option>`).join(''):'<option value="">Nenhum projeto</option>';
   const p=curProj();$('#projInfo').textContent=p?[p.order&&'OP '+p.order,p.lot&&'lote '+p.lot].filter(Boolean).join(' · '):'';
   $('#drop').classList.toggle('off',!p);renderProjList()}
+/* O arquivo do projeto é dado externo: números das peças viram números de verdade antes de chegar ao HTML. */
+const num=(v,d)=>{const n=typeof v==='number'||typeof v==='string'&&v.trim()?+v:NaN;return Number.isFinite(n)?n:d};
+const normPart=p=>({...p,id:num(p.id,0),qty:Math.max(1,Math.round(num(p.qty,1))),th:num(p.th,0)>0?num(p.th,1):1,w:Math.max(0,num(p.w,0)),h:Math.max(0,num(p.h,0)),A:num(p.A,0),holes:Math.max(0,Math.round(num(p.holes,0))),mat:String(p.mat??''),name:String(p.name??''),pick:false});
 async function openProject(id){
-  await flush();S.projectId=id||null;
+  cancelNest();await flush();
   const d=id?await api('/api/project/'+id):{};
-  S.parts=(d.parts||[]).map(p=>({...p,pick:false}));S.files=d.files||[];S.seq=d.seq||{};S.uid=d.uid||0;S.groups=d.groups||{};S.setQty=d.setQty||{};S.savedNest=d.nest||null;
-  S.links=(d.links||[]).filter(l=>l&&l.id!==id&&S.store.projects.some(p=>p.id===l.id));await loadGuests();
-  S.res=null;S.snap=null;S.pdf=null;S.tab=null;sent.proj=JSON.stringify(projPayload());
+  /* troca tudo de uma vez, sem await no meio: um autosave aqui não pode mandar dados velhos para o id novo */
+  clearTimeout(saveT);saveT=null;S.projectId=id||null;S.projRev=Number.isInteger(d.rev)?d.rev:0;
+  S.uid=Math.max(0,num(d.uid,0));S.parts=(d.parts||[]).map(normPart);for(const p of S.parts)if(!p.id)p.id=++S.uid;
+  S.files=d.files||[];S.seq=d.seq||{};S.setQty=d.setQty||{};S.savedNest=d.nest||null;
+  S.groups={};for(const k in d.groups||{}){const g=d.groups[k]||{};S.groups[k]={w:num(g.w,3000),h:num(g.h,1250)}}
+  S.links=(d.links||[]).filter(l=>l&&l.id!==id&&S.store.projects.some(p=>p.id===l.id));sent.proj=JSON.stringify(projPayload());await loadGuests();
+  S.res=null;S.snap=null;S.pdf=null;S.tab=null;
   if(S.store.settings.last!==id){S.store.settings.last=id;autosave()}
   renderProj();render();if(S.savedNest&&openSavedNest(true))render()}
 $('#proj').onchange=e=>openProject(e.target.value).catch(x=>toast(x.message,'bad'));
@@ -489,10 +507,11 @@ const projCode=id=>{const p=S.store.projects.find(x=>x.id===id);return p?p.code:
 async function loadGuests(){
   S.parts=S.parts.filter(p=>!p.guest);
   for(const l of S.links){
-    try{const d=await api('/api/project/'+l.id);for(const p of d.parts||[])S.parts.push({...p,id:l.base*GUEST+p.id,guest:l.id,pick:false})}
+    try{const d=await api('/api/project/'+l.id);for(const p of d.parts||[]){const q=normPart(p);S.parts.push({...q,id:num(l.base,0)*GUEST+q.id,guest:l.id})}}
     catch(e){toast('Não foi possível ler o projeto '+projCode(l.id)+': '+e.message,'bad')}}}
 async function linkProject(id,on){
   if(!S.projectId||id===S.projectId)return;
+  cancelNest();
   if(on){if(!S.links.some(l=>l.id===id)){let b=1;while(S.links.some(l=>l.base===b))b++;S.links.push({id,base:b})}}
   else S.links=S.links.filter(l=>l.id!==id);
   await loadGuests();S.res=null;S.snap=null;S.pdf=null;renderProj();render();
@@ -508,14 +527,14 @@ $('#projList').addEventListener('click',e=>{const b=e.target.closest('[data-open
 $('#projList').addEventListener('change',e=>{const t=e.target;if(t.dataset.link)linkProject(t.dataset.link,t.checked).catch(x=>toast(x.message,'bad'))});
 $('#projFilter').addEventListener('input',renderProjList);
 $('#projNew2').onclick=openProjModal;
-function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';$('#projModal').hidden=false;$('#pjCode').focus()}
-$('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>{$('#projModal').hidden=true};
+function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';showModal('projModal','#pjCode')}
+$('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>hideModal('projModal');
 $('#pjOk').onclick=async()=>{
   const code=$('#pjCode').value.trim(),product=$('#pjProd').value.trim();
   if(!code||!product){$('#pjErr').textContent='Informe o código e o produto.';return}
   if(S.store.projects.some(p=>p.code.toLowerCase()===code.toLowerCase())){$('#pjErr').textContent='Já existe um projeto com este código.';return}
   const p={id:nid('pj'),code,product,order:$('#pjOrd').value.trim(),lot:$('#pjLot').value.trim(),createdAt:new Date().toISOString(),status:'aberto',notes:''};
-  S.store.projects.push(p);$('#projModal').hidden=true;await flush();hist('project.create',{id:p.id,code,product});await openProject(p.id);toast('Projeto criado.','ok')};
+  S.store.projects.push(p);hideModal('projModal');await flush();hist('project.create',{id:p.id,code,product});await openProject(p.id);toast('Projeto criado.','ok')};
 
 /* ---------- importação em lote com revisão ---------- */
 const sha256=async buf=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -551,15 +570,15 @@ function impRender(){
   $('#impBody').innerHTML=`<table class="rev"><thead><tr><th></th><th>Arquivo</th><th>Peças</th><th>Material</th><th>Espessura (mm)</th><th>Modelo</th><th>Situação</th></tr></thead><tbody>`+IMP.rows.map((r,i)=>{
     const st=r.err?`<span class="tag pend">erro: ${esc(r.err)}</span>`:r.dup?`<span class="tag pend">idêntico a ${esc(r.dup)}</span>`:'';
     const w=(r.geo?`<span class="tag pend">desenho não lido: ${esc(r.geo)}. A peça pode estar incompleta</span>`:'')+r.warn.map(x=>`<span class="tag inf">${esc(x)}</span>`).join('');
-    return `<tr data-i="${i}"><td><input type="checkbox" data-k="include" ${r.include?'checked':''} ${r.err?'disabled':''} aria-label="Importar ${esc(r.name)}"></td><td title="SHA-256 ${esc(r.hash||'')}">${esc(r.name)}<span class="tag">${esc(r.ext)} · ${Math.max(1,Math.round(r.size/1024))} KB</span></td><td data-l="Peças">${r.contours} contorno(s) → ${r.parts.length}</td><td data-l="Material"><input data-k="mat" list="mats" value="${esc(r.mat)}"><span class="tag ${r.matSrc==='manual'?'':'inf'}">${esc(r.matSrc)}</span></td><td data-l="Espessura (mm)"><input data-k="th" type="number" step=".1" min=".1" value="${r.th}"><span class="tag ${r.thSrc==='manual'?'':'inf'}">${esc(r.thSrc)}</span></td><td data-l="Modelo"><select data-k="model"><option value="">Sem modelo (pendente)</option>${mods.replace(`value="${esc(r.model)}"`,`value="${esc(r.model)}" selected`)}</select></td><td class="wide" data-l="Situação">${st}${w}${!st&&!w?'<span class="tag">ok</span>':''}</td></tr>`}).join('')+'</tbody></table>';
+    return `<tr data-i="${i}"><td><input type="checkbox" data-k="include" ${r.include?'checked':''} ${r.err?'disabled':''} aria-label="Importar ${esc(r.name)}"></td><td title="SHA-256 ${esc(r.hash||'')}">${esc(r.name)}<span class="tag">${esc(r.ext)} · ${Math.max(1,Math.round(r.size/1024))} KB</span></td><td data-l="Peças">${r.contours} contorno(s) → ${r.parts.length}</td><td data-l="Material"><input data-k="mat" list="mats" value="${esc(r.mat)}"><span class="tag ${r.matSrc==='manual'?'':'inf'}">${esc(r.matSrc)}</span></td><td data-l="Espessura (mm)"><input data-k="th" type="number" step=".1" min=".1" value="${esc(r.th)}"><span class="tag ${r.thSrc==='manual'?'':'inf'}">${esc(r.thSrc)}</span></td><td data-l="Modelo"><select data-k="model"><option value="">Sem modelo (pendente)</option>${mods.replace(`value="${esc(r.model)}"`,`value="${esc(r.model)}" selected`)}</select></td><td class="wide" data-l="Situação">${st}${w}${!st&&!w?'<span class="tag">ok</span>':''}</td></tr>`}).join('')+'</tbody></table>';
   const n=IMP.rows.filter(r=>r.include).length,p=curProj();
   $('#impHead').textContent=`Destino: ${p.code} · ${p.product}. ${n} de ${IMP.rows.length} arquivo(s) serão importados.`;$('#impOk').disabled=!n}
-function reviewImport(rows){IMP={rows};impRender();$('#impModal').hidden=false}
+function reviewImport(rows){IMP={rows};impRender();showModal('impModal','#impOk')}
 $('#impBody').addEventListener('input',e=>{const tr=e.target.closest('tr');if(!tr||!IMP)return;const r=IMP.rows[+tr.dataset.i],k=e.target.dataset.k;
   if(k==='include'){r.include=e.target.checked;impRender();return}
   if(k==='mat'){r.mat=e.target.value;r.matSrc='manual'}if(k==='th'){r.th=+e.target.value;r.thSrc='manual'}if(k==='model')r.model=e.target.value});
 $('#impBody').addEventListener('change',e=>{if(IMP&&['mat','th','model'].includes(e.target.dataset.k))impRender()});
-$('#impNo').onclick=()=>{$('#impModal').hidden=true;IMP=null};
+$('#impNo').onclick=()=>{hideModal('impModal');IMP=null};
 $('#impOk').onclick=async()=>{
   const use=IMP.rows.filter(r=>r.include&&!r.err);
   const bad=use.find(r=>!(r.th>0)||!r.mat.trim());if(bad){toast('Informe material e espessura válidos em '+bad.name+'.','bad');return}
@@ -572,7 +591,7 @@ $('#impOk').onclick=async()=>{
     if(r.model)for(const q of S.parts.slice(before))q.qty*=setN(r.model);
     S.files.push({id,name:r.name,format:r.ext,size:r.size,hash:r.hash,importedAt:new Date().toISOString(),status:'importado',parts:S.parts.length-before,unitKnown:r.unitKnown,mat:r.mat.trim(),th:r.th,thSrc:r.thSrc,matSrc:r.matSrc});
     done.push({name:r.name,hash:r.hash,parts:S.parts.length-before,mat:r.mat.trim(),th:r.th,thSrc:r.thSrc})}
-  $('#impModal').hidden=true;IMP=null;
+  hideModal('impModal');IMP=null;
   if(!done.length){toast('Nada importado.','bad');return}
   const pend=S.parts.filter(p=>!p.groupId).length;
   $('#imsg').className='msg'+(pend?' w':' ok');$('#imsg').textContent=`${done.length} arquivo(s) importado(s).`+(pend?` ${pend} peça(s) sem modelo, pendentes de classificação.`:'');
@@ -637,7 +656,9 @@ function nestGroup(g,items,o,order){
   const rules=o.rules||{mix:true,isolate:[],together:[],forbid:[]};
   const together=new Set(rules.together||[]), opened=new Map();
   const cache=new Map(),mk=(it,a,mi)=>{const k=it.id+'|'+a+'|'+mi;if(!cache.has(k)){const t=tf(it.rings,a,mi);cache.set(k,{...t,m:mask(o.fill===false?[t.rings[0]]:t.rings,t.w,t.h,cs,r)})}return cache.get(k)};
-  const angs=[];const st=o.rot===-1?15:o.rot;if(st>0)for(let a=0;a<360;a+=st)angs.push(a);else angs.push(0);
+  /* Igual a nest.py angle_set: o giro da peça manda; 'auto' usa o global. shortcut: 'free' sem os ângulos do casco, só passo de 15°. */
+  const angsOf=it=>{const md=it.rot;if(md==='0')return[0];if(md==='180')return[0,180];if(md==='90')return[0,90,180,270];
+    const free=md==='free'||o.rot===-1,st=free?15:o.rot,a=[];if(st>0)for(let x=0;x<360;x+=st)a.push(x);else a.push(0);return a};
   for(const it of order){
     const gid=it.groupId||'';
     let put=false;
@@ -653,7 +674,7 @@ function nestGroup(g,items,o,order){
         continue;
       }
       let best=null;
-      for(const a of angs)for(const mi of it.mirror?[0,1]:[0]){const c=mk(it,a,mi);if(c.m.W>W||c.m.H>H)continue;const sp=findSpot(sh,c.m,best?Math.ceil(best.sc/1e5)-c.m.W:1e9);if(!sp)continue;
+      for(const a of angsOf(it))for(const mi of it.mirror?[0,1]:[0]){const c=mk(it,a,mi);if(c.m.W>W||c.m.H>H)continue;const sp=findSpot(sh,c.m,best?Math.ceil(best.sc/1e5)-c.m.W:1e9);if(!sp)continue;
         const sc=(sp[0]+c.m.W)*1e5+sp[1];if(!best||sc<best.sc)best={sc,a,mi,c,sp}}
       if(best){const{c,sp}=best;for(const[y,x0,x1]of c.m.runs)sh.occ.fill(1,(sp[1]+y)*W+sp[0]+x0,(sp[1]+y)*W+sp[0]+x1);
         sh.placed.push({it,rings:c.rings,x:o.mar+(sp[0]+r)*cs,y:o.mar+(sp[1]+r)*cs,w:c.w,h:c.h,a:best.a,mi:best.mi});
@@ -687,17 +708,24 @@ function progShow(elapsed,total,text){$('#prog').hidden=false;$('#progBar').styl
 function progHide(){$('#prog').hidden=true;$('#progBar').style.width='0';$('#stopNest').disabled=false;$('#stopNest').textContent='Parar e ficar com o melhor até agora'}
 $('#stopNest').onclick=async()=>{if(!JOB||JOB.stopping)return;JOB.stopping=true;$('#stopNest').disabled=true;$('#stopNest').textContent='Parando…';
   try{await sfetch('/api/nest/stop/'+JOB.id,{method:'POST',body:'{}'})}catch(e){toast(e.message,'bad')}};
-async function serverNest(o){
+/* NEST.run conta execuções: resultado ou prévia de uma execução antiga (projeto trocado no meio) é descartado. */
+const NEST={run:0,busy:false};
+function cancelNest(){if(!NEST.busy)return;NEST.run++;NEST.busy=false;
+  if(JOB&&!JOB.stopping){JOB.stopping=true;sfetch('/api/nest/stop/'+JOB.id,{method:'POST',body:'{}'}).catch(()=>{})}
+  JOB=null;progHide();$('#go').disabled=false;$('#nmsg').className='msg w';$('#nmsg').textContent='Encaixe interrompido: o projeto mudou.'}
+async function serverNest(o,run){
   const G=groupsOf(),groups={},byId={},secs=+$('#secs').value,nGroups=Object.keys(G).length;
   for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
   const r=await sfetch('/api/nest/start',{method:'POST',body:JSON.stringify({...o,seconds:secs,groups})});
   if(!r.ok)throw Error(await r.text());
-  const id=(await r.json()).id;JOB={id,stopping:false};let rev=-1,seen=0,note='';
+  const id=(await r.json()).id;
+  if(run!==NEST.run){sfetch('/api/nest/stop/'+id,{method:'POST',body:'{}'}).catch(()=>{});return null}
+  const job={id,stopping:false};JOB=job;let rev=-1,seen=0,note='';
   progShow(0,secs,'Começando…');
   try{for(;;){
-    await new Promise(z=>setTimeout(z,500));
+    await new Promise(z=>setTimeout(z,500));if(run!==NEST.run)return null;
     const q=await sfetch('/api/nest/poll/'+id+'?rev='+rev);if(!q.ok)throw Error(await q.text());
-    const st=await q.json();
+    const st=await q.json();if(run!==NEST.run)return null;
     if(st.error)throw Error(st.error);
     if(st.result)return decodeNest(st.result,byId);
     if(st.best&&st.rev!==rev){rev=st.rev;const pv=decodeNest(st.best,byId),keys=Object.keys(pv);
@@ -706,7 +734,7 @@ async function serverNest(o){
         const ns=keys.reduce((a,k)=>a+pv[k].sheets.length,0),last=(pv[cur].ext||[]).slice(-1)[0];
         note=' · '+(nGroups>1?'grupo '+keys.length+' de '+nGroups+' · ':'')+ns+' chapa'+(ns===1?'':'s')+(last?', '+last+' mm na última':'')}}
     progShow(st.elapsed,st.seconds,fmtSecs(st.elapsed)+' de '+fmtSecs(st.seconds)+note+(st.engine==='rust'?'':' · sem prévia (motor Python)'));
-  }}finally{JOB=null;progHide()}
+  }}finally{if(JOB===job){JOB=null;progHide()}}
 }
 function takeSnap(o,engine){
   const vals=S.res?Object.values(S.res):[];
@@ -747,28 +775,34 @@ $('#nestSave').onclick=async()=>{
   S.savedNest={savedAt:new Date().toISOString(),sig:nestSig(),tab:S.tab,sheets,snap:JSON.parse(JSON.stringify(S.snap)),res:packNest()};
   hist('nest.save',{sheets,groups:Object.keys(S.res)});render();await flush();status('Encaixe salvo no projeto.',false)};
 async function runNest(){
+  const run=++NEST.run;NEST.busy=true;$('#go').disabled=true;
+  try{await nestRun(run)}finally{if(run===NEST.run){NEST.busy=false;$('#go').disabled=!S.parts.some(p=>p.on)}}}
+async function nestRun(run){
   const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),fill:$('#fill').checked,rules:currentRules()};
   const G0=groupsOf();
   for(const k of Object.keys(G0)){const g=S.groups[k];if(!(g&&g.w>2*o.mar+1&&g.h>2*o.mar+1)){status('A chapa de '+k+' precisa ser maior que as margens.',true);return}}
-  $('#go').disabled=true;S.res=null;S.snap=null;S.pdf=null;
+  S.res=null;S.snap=null;S.pdf=null;
   if($('#srv').checked){
     try{$('#nmsg').className='msg';$('#nmsg').textContent='Otimizando no servidor ('+fmtSecs(+$('#secs').value)+')…';await new Promise(r=>setTimeout(r,30));
-      S.res=await serverNest(o);S.tab=Object.keys(S.res)[0];takeSnap(o,'servidor');
+      const R=await serverNest(o,run);if(run!==NEST.run||!R)return;S.res=R;S.tab=Object.keys(S.res)[0];takeSnap(o,'servidor');
       $('#nmsg').className='msg ok';{const v=Object.values(S.res),n=v.reduce((a,x)=>a+(x.iters||0),0);const rust=v[0].engine==='rust',tail=', '+(v[0].workers||1)+' núcleo(s), '+n.toLocaleString('pt-BR')+' tentativa(s).';
         if(!rust)$('#nmsg').className='msg w';
         $('#nmsg').textContent=rust?(v.some(x=>x.stopped)?'Parado antes do prazo, com o melhor até ali · motor Rust':'Pronto · motor Rust')+tail:'Pronto, mas sem o motor Rust: o servidor não achou o executável e usou o Python, bem mais lento'+tail+' Compile com "cargo build --release" na pasta motor.'}
-      toast('Encaixe pronto.','ok');$('#go').disabled=false;render();return}
-    catch(e){$('#nmsg').className='msg w';$('#nmsg').textContent='Servidor indisponível ('+e.message+'); usando o motor do navegador…';await new Promise(r=>setTimeout(r,800))}}
-  const asked=o.cs;o.cs=Math.max(o.cs,3);S.res={};const keys=Object.keys(groupsOf());let k=0;
+      toast('Encaixe pronto.','ok');render();return}
+    catch(e){if(run!==NEST.run)return;
+      /* só cai para o navegador com o servidor desligado; erro do servidor (400, 429, falha no job) é mostrado e para */
+      if(e.message!==OFF){status(e.message||'Falha no encaixe do servidor.',true);return}
+      $('#nmsg').className='msg w';$('#nmsg').textContent='Servidor indisponível ('+e.message+'); usando o motor do navegador…';await new Promise(r=>setTimeout(r,800))}}
+  const asked=o.cs;o.cs=Math.max(o.cs,3);const out={};const keys=Object.keys(groupsOf());let k=0;
   for(const key of keys){const g=S.groups[key],items=[];groupsOf()[key].forEach(p=>{for(let i=0;i<p.qty;i++)items.push(p)});
-    $('#nmsg').textContent=`Encaixando ${key} (${++k}/${keys.length})…`;await new Promise(r=>setTimeout(r,20));
+    $('#nmsg').textContent=`Encaixando ${key} (${++k}/${keys.length})…`;await new Promise(r=>setTimeout(r,20));if(run!==NEST.run)return;
     const orders=[(a,b)=>b.A-a.A,(a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h),(a,b)=>b.w*b.h-a.w*a.h];let best=null;
     for(const f of orders){const res=nestGroup(g,items,o,[...items].sort(f));
       const sc=res.fail.length*1e9+res.sheets.length*1e6-(res.sheets.length?used(res)/res.sheets.length/(g.w*g.h)*1e5:0);
-      if(!best||sc<best.sc)best={sc,res};await new Promise(r=>setTimeout(r,0))}
-    S.res[key]=best.res}
-  takeSnap(o,'navegador');if(asked<3)S.snap.askedCs=asked;
-  $('#nmsg').className='msg ok';$('#nmsg').textContent='Pronto.';toast('Encaixe pronto.','ok');$('#go').disabled=false;S.tab=Object.keys(S.res)[0];render()}
+      if(!best||sc<best.sc)best={sc,res};await new Promise(r=>setTimeout(r,0));if(run!==NEST.run)return}
+    out[key]=best.res}
+  S.res=out;takeSnap(o,'navegador');if(asked<3)S.snap.askedCs=asked;
+  $('#nmsg').className='msg ok';$('#nmsg').textContent='Pronto.';toast('Encaixe pronto.','ok');S.tab=Object.keys(S.res)[0];render()}
 const showResult=()=>{if(matchMedia('(max-width:1100px)').matches)$('.mid').scrollIntoView({behavior:'smooth',block:'start'})};
 $('#go').onclick=()=>runNest().then(()=>{if(S.res)showResult()});
 ['gap','mar','rot','res','secs','fill'].forEach(id=>$('#'+id).addEventListener('change',()=>{if(S.res){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Parâmetro alterado. Encaixe de novo.';render()}}));
@@ -776,12 +810,14 @@ $('#go').onclick=()=>runNest().then(()=>{if(S.res)showResult()});
 /* ---------- cores e presets ---------- */
 function hexColor(v,fb){return /^#[0-9a-fA-F]{6}$/.test(v||'')?v:fb}
 function partColor(p){if(p.groupId){const s=S.sets.find(x=>x.id===p.groupId);if(s)return s.color}return hexColor(p.color,'#8b93a1')}
-function textOn(hex){const n=parseInt(String(hex).slice(1),16);if(!Number.isFinite(n))return '#1a1c20';const r=n>>16,g=(n>>8)&255,b=n&255;return (r*299+g*587+b*114)/1000>150?'#1a1c20':'#f4f1ea'}
 function nid(prefix){return prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function loadPresets(){return (S.store.presets||[]).filter(p=>p&&typeof p.name==='string'&&p.id)}
 function savePresets(list){if(!S.ready)return false;S.store.presets=list;hist('presets.update',{names:list.map(p=>p.name)});autosave();return true}
 function presetMsg(text,bad){const el=$('#pmsg');el.className='msg'+(bad?' w':' ok');el.textContent=text;toast(text,bad?'bad':'ok')}
 function status(text,bad){const el=$('#nmsg');el.className='msg'+(bad?' w':' ok');el.textContent=text;toast(text,bad?'bad':'ok')}
+/* Ao fechar, o foco volta para quem abriu o modal (teclado e leitor de tela não se perdem). */
+function showModal(id,f){const m=$('#'+id);if(m.hidden)m._ret=document.activeElement;m.hidden=false;if(f)$(f).focus()}
+function hideModal(id){const m=$('#'+id);if(m.hidden)return;m.hidden=true;const r=m._ret;m._ret=null;if(r&&r.isConnected&&r.focus)r.focus()}
 let toastT=0,asking=false;
 function toast(text,kind,undo){const el=$('#toast');if(!text){el.hidden=true;return}el.textContent=text;
   if(undo){const b=document.createElement('button');b.type='button';b.textContent='Desfazer';b.style.marginLeft='10px';b.onclick=()=>{el.hidden=true;undo()};el.appendChild(b)}
@@ -793,9 +829,8 @@ function ask(text,yesLabel,danger){
     $('#askText').textContent=text;
     $('#askYes').textContent=yesLabel||'Continuar';
     $('#askYes').className=danger?'danger':'pri';
-    $('#ask').hidden=false;
-    $('#askNo').focus();
-    const done=v=>{asking=false;$('#ask').hidden=true;$('#askYes').onclick=null;$('#askNo').onclick=null;resolve(v)};
+    showModal('ask','#askNo');
+    const done=v=>{asking=false;hideModal('ask');$('#askYes').onclick=null;$('#askNo').onclick=null;resolve(v)};
     $('#askYes').onclick=()=>done(true);
     $('#askNo').onclick=()=>done(false);
   });
@@ -804,7 +839,7 @@ function capturePreset(name,id){
   const sheets={};
   for(const k of Object.keys(S.groups)){const g=S.groups[k];if(g&&+g.w>0&&+g.h>0)sheets[k]={w:+g.w,h:+g.h}}
   const members={},colors={};
-  for(const p of S.parts){if(p.groupId){(members[p.groupId]||(members[p.groupId]=[])).push(p.name)}else if(p.color)colors[p.name]=p.color}
+  for(const p of S.parts){if(p.guest)continue;if(p.groupId){(members[p.groupId]||(members[p.groupId]=[])).push(p.name)}else if(p.color)colors[p.name]=p.color}
   return {id:id||nid('p'),name,savedAt:new Date().toISOString(),
     gap:+$('#gap').value,mar:+$('#mar').value,rot:$('#rot').value,res:$('#res').value,secs:$('#secs').value,
     srv:$('#srv').checked,fill:$('#fill').checked,unit:$('#unit').value,tol:+$('#tol').value,
@@ -838,7 +873,7 @@ function applyPreset(preset){
   const byName={};
   for(const s of S.sets) for(const n of ((preset.members||{})[s.id]||[])) byName[n]=s.id;
   let linked=0,cleared=0;
-  for(const p of S.parts){
+  for(const p of S.parts){if(p.guest)continue;
     if(byName[p.name]&&ids.has(byName[p.name])){p.groupId=byName[p.name];linked++}
     else if(p.groupId&&!ids.has(p.groupId)){p.groupId='';cleared++}
     if(!p.groupId&&preset.colors&&hexColor(preset.colors[p.name],'')) p.color=preset.colors[p.name];
@@ -1014,7 +1049,7 @@ $('#forbids').onclick=e=>{
 const gk=p=>p.mat+' · '+p.th+' mm';
 function groupsOf(){const o={};S.parts.filter(p=>p.on).forEach(p=>(o[gk(p)]||(o[gk(p)]=[])).push(p));return o}
 const path=rs=>rs.map(r=>'M'+r.map(p=>p[0].toFixed(1)+' '+(-p[1]).toFixed(1)).join('L')+'Z').join('');
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function whenLabel(v){const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}
 function setNameOf(id){const s=S.sets.find(x=>x.id===id);return s?s.name:'Sem modelo'}
 function ruleHintText(){
@@ -1031,36 +1066,39 @@ function renderLegend(){
   $('#legend').innerHTML=S.sets.map(s=>{
     const parts=S.parts.filter(p=>p.groupId===s.id);
     const q=parts.reduce((a,p)=>a+(p.on?p.qty:0),0);
-    return `<div class="setcard"><div class="top"><input type="color" value="${s.color}" data-set="${esc(s.id)}" data-set-f="color" aria-label="Cor de ${esc(s.name)}"><input type="text" value="${esc(s.name)}" data-set="${esc(s.id)}" data-set-f="name" aria-label="Nome do conjunto" maxlength="60"></div><label class="f">Quantidade de modelos<input type="number" min="1" step="1" value="${setN(s.id)}" data-set="${esc(s.id)}" data-set-f="count" aria-label="Quantidade de modelos ${esc(s.name)}"></label><div class="m">${q} un · ${parts.length?esc(parts.map(p=>p.name+' ×'+p.qty).join(', ')):'nenhuma peça neste projeto'}</div><div class="btns"><button type="button" data-del-set-parts="${esc(s.id)}" ${parts.length?'':'disabled'}>Excluir peças</button><button type="button" data-del-set="${esc(s.id)}" aria-label="Excluir modelo ${esc(s.name)}">Excluir modelo</button></div><div class="flags"><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="isolate" ${s.isolate?'checked':''}> Fabricar em chapas separadas</label><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="together" ${s.together?'checked':''}> Manter na mesma chapa</label></div></div>`;
+    return `<div class="setcard"><div class="top"><input type="color" value="${esc(s.color)}" data-set="${esc(s.id)}" data-set-f="color" aria-label="Cor de ${esc(s.name)}"><input type="text" value="${esc(s.name)}" data-set="${esc(s.id)}" data-set-f="name" aria-label="Nome do conjunto" maxlength="60"></div><label class="f">Quantidade de modelos<input type="number" min="1" step="1" value="${esc(setN(s.id))}" data-set="${esc(s.id)}" data-set-f="count" aria-label="Quantidade de modelos ${esc(s.name)}"></label><div class="m">${esc(q)} un · ${parts.length?esc(parts.map(p=>p.name+' ×'+p.qty).join(', ')):'nenhuma peça neste projeto'}</div><div class="btns"><button type="button" data-del-set-parts="${esc(s.id)}" ${parts.length?'':'disabled'}>Excluir peças</button><button type="button" data-del-set="${esc(s.id)}" aria-label="Excluir modelo ${esc(s.name)}">Excluir modelo</button></div><div class="flags"><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="isolate" ${s.isolate?'checked':''}> Fabricar em chapas separadas</label><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="together" ${s.together?'checked':''}> Manter na mesma chapa</label></div></div>`;
   }).join('')||'<div class="msg">Nenhum modelo criado. Dê um nome e clique em Criar modelo.</div>';
   const opts=S.sets.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   $('#fa').innerHTML=opts;$('#fb').innerHTML=opts;$('#forbidAdd').disabled=S.sets.length<2;
-  $('#forbids').innerHTML=S.forbid.map((p,i)=>{const A=S.sets.find(s=>s.id===p[0]),B=S.sets.find(s=>s.id===p[1]);if(!A||!B)return '';return `<div class="pair"><span><i class="sw" style="background:${A.color}"></i>${esc(A.name)} × <i class="sw" style="background:${B.color}"></i>${esc(B.name)}</span><button type="button" data-unforbid="${i}">Tirar</button></div>`}).join('');
+  $('#forbids').innerHTML=S.forbid.map((p,i)=>{const A=S.sets.find(s=>s.id===p[0]),B=S.sets.find(s=>s.id===p[1]);if(!A||!B)return '';return `<div class="pair"><span><i class="sw" style="background:${esc(A.color)}"></i>${esc(A.name)} × <i class="sw" style="background:${esc(B.color)}"></i>${esc(B.name)}</span><button type="button" data-unforbid="${i}">Tirar</button></div>`}).join('');
   $('#ruleHint').textContent=ruleHintText();
 }
 function legendBar(){
-  const bits=S.sets.map(s=>{const q=S.parts.filter(p=>p.on&&p.groupId===s.id).reduce((a,p)=>a+p.qty,0);if(!q)return '';return `<span class="lg"><i class="sw" style="background:${s.color}"></i>${esc(s.name)}<b>${q}</b></span>`}).filter(Boolean);
+  const bits=S.sets.map(s=>{const q=S.parts.filter(p=>p.on&&p.groupId===s.id).reduce((a,p)=>a+p.qty,0);if(!q)return '';return `<span class="lg"><i class="sw" style="background:${esc(s.color)}"></i>${esc(s.name)}<b>${esc(q)}</b></span>`}).filter(Boolean);
   const loose=S.parts.filter(p=>p.on&&!p.groupId).reduce((a,p)=>a+p.qty,0);
-  if(loose) bits.push(`<span class="lg"><i class="sw" style="background:#8b93a1"></i>Sem conjunto<b>${loose}</b></span>`);
+  if(loose) bits.push(`<span class="lg"><i class="sw" style="background:#8b93a1"></i>Sem conjunto<b>${esc(loose)}</b></span>`);
   return bits.length?`<div class="legend-bar">${bits.join('')}</div>`:'';
 }
 function render(){renderCore();autosave()}
 function renderCore(){
-  $('#go').disabled=!S.parts.some(p=>p.on);
+  $('#go').disabled=NEST.busy||!S.parts.some(p=>p.on);
+  /* a lista é refeita por innerHTML: guarda o campo com foco e a rolagem para devolver depois */
+  const fa=document.activeElement,fp=fa&&fa.closest&&fa.closest('#parts .part'),fk=fp&&fa.dataset.f?[fp.dataset.i,fa.dataset.f]:null,pst=$('#panel').scrollTop;
   $('#pcount').textContent=S.parts.length?`${S.parts.reduce((s,p)=>s+(p.on?p.qty:0),0)} un · ${S.parts.length} únicas`:'';
   $('#parts').innerHTML=S.parts.map((p,i)=>{const col=partColor(p),ro=p.guest?' disabled':'';return `<div class="part ${p.on?'':'off'} ${p.pick?'pick':''} ${p.groupId?'':'pend'} ${p.guest?'guest':''}" data-i="${i}">
    <input type="checkbox" data-f="on" ${p.on?'checked':''}${ro} title="Usar no encaixe" aria-label="Usar ${esc(p.name)} no encaixe">
-   <svg viewBox="${-2} ${-p.h-2} ${p.w+4} ${p.h+4}"><path d="${path(p.rings)}" fill="${col}" fill-opacity=".85" fill-rule="evenodd"/></svg>
-   <div><div class="n"><i class="sw" style="background:${col}"></i>${esc(p.name)}${p.guest?'<span class="tag inf" title="Peça de outro projeto, juntada só para o encaixe">'+esc(projCode(p.guest))+'</span>':''}${p.groupId?'':'<span class="tag pend">sem modelo</span>'}${p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':''}</div><div class="m" title="${esc(fileName(p.fileId))}">${p.w.toFixed(0)}×${p.h.toFixed(0)} mm${p.holes?` · ${p.holes} furo${p.holes>1?'s':''}`:''}${p.groupId?' · '+esc(setNameOf(p.groupId)):''}${p.fileId?' · '+esc(fileName(p.fileId)):''}</div></div>
-   <div class="c"><input type="number" min="1" value="${p.qty}" data-f="qty"${ro} title="Quantidade" aria-label="Quantidade de ${esc(p.name)}">
-    <input value="${esc(p.mat)}" data-f="mat"${ro} list="mats" title="Material" aria-label="Material de ${esc(p.name)}"><input type="number" step=".1" value="${p.th}" data-f="th"${ro} title="Espessura (mm)" aria-label="Espessura de ${esc(p.name)}"></div>
+   <svg viewBox="-2 ${esc(-p.h-2)} ${esc(p.w+4)} ${esc(p.h+4)}"><path d="${path(p.rings)}" fill="${col}" fill-opacity=".85" fill-rule="evenodd"/></svg>
+   <div><div class="n"><i class="sw" style="background:${col}"></i>${esc(p.name)}${p.guest?'<span class="tag inf" title="Peça de outro projeto, juntada só para o encaixe">'+esc(projCode(p.guest))+'</span>':''}${p.groupId?'':'<span class="tag pend">sem modelo</span>'}${p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':''}</div><div class="m" title="${esc(fileName(p.fileId))}">${esc(p.w.toFixed(0))}×${esc(p.h.toFixed(0))} mm${p.holes?` · ${esc(p.holes)} furo${p.holes>1?'s':''}`:''}${p.groupId?' · '+esc(setNameOf(p.groupId)):''}${p.fileId?' · '+esc(fileName(p.fileId)):''}</div></div>
+   <div class="c"><input type="number" min="1" value="${esc(p.qty)}" data-f="qty"${ro} title="Quantidade" aria-label="Quantidade de ${esc(p.name)}">
+    <input value="${esc(p.mat)}" data-f="mat"${ro} list="mats" title="Material" aria-label="Material de ${esc(p.name)}"><input type="number" step=".1" value="${esc(p.th)}" data-f="th"${ro} title="Espessura (mm)" aria-label="Espessura de ${esc(p.name)}"></div>
    <div class="c2"><label><input type="checkbox" data-f="pick" ${p.pick?'checked':''}${ro}>marcar</label>
     <select data-f="groupId"${ro} aria-label="Conjunto de ${esc(p.name)}"><option value="">Sem modelo (pendente)</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${p.groupId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
    <div class="c2">Giro <select data-f="rot"${ro} aria-label="Giro de ${esc(p.name)}">${[['auto','Padrão (global)'],['free','Livre 360°'],['90','90°'],['180','180° (veio)'],['0','Fixo (veio)']].map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select><label><input type="checkbox" data-f="mirror" ${p.mirror?'checked':''}${ro}>espelhar</label><button type="button" data-del-part${ro} aria-label="Excluir ${esc(p.name)}">Excluir</button></div></div>`}).join('');
+  if(fk){const el=$(`#parts .part[data-i="${fk[0]}"] [data-f="${fk[1]}"]`);if(el&&!el.disabled)el.focus({preventScroll:true})}$('#panel').scrollTop=pst;
   const G=groupsOf();
   Object.keys(G).forEach(k=>{if(!S.groups[k]){const mem=S.sheetMemory&&S.sheetMemory[k];if(mem&&+mem.w>0&&+mem.h>0)S.groups[k]={w:+mem.w,h:+mem.h};else{const t=+k.split('· ')[1].replace(' mm','');const mdf=/mdf|mdp|compens/i.test(k);S.groups[k]=mdf?{w:2750,h:1840}:{w:3000,h:t>=6?1500:1250}}}});
   $('#groups').innerHTML=Object.keys(G).map(k=>{const g=S.groups[k],q=G[k].reduce((s,p)=>s+p.qty,0),a=G[k].reduce((s,p)=>s+p.A*p.qty,0)/1e6;
-   return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset><option value="">Personalizada</option>${[[2750,1840],[2750,1850],[2440,1220],[3000,1250],[3000,1500]].map(([w,hh])=>`<option value="${w}x${hh}" ${g.w===w&&g.h===hh?'selected':''}>${w}×${hh} mm</option>`).join('')}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${g.w}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${g.h}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
+   return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset><option value="">Personalizada</option>${[[2750,1840],[2750,1850],[2440,1220],[3000,1250],[3000,1500]].map(([w,hh])=>`<option value="${w}x${hh}" ${g.w===w&&g.h===hh?'selected':''}>${w}×${hh} mm</option>`).join('')}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${esc(g.w)}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${esc(g.h)}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
   renderLegend();updateColorButtons();
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
@@ -1078,13 +1116,13 @@ function renderCore(){
   if(nJunto) warn+=(warn?' ':'')+`${nJunto} peça(s) não couberam na mesma chapa do conjunto.`;
   $('#stage').innerHTML=(warn?`<div class="msg w" style="margin-bottom:8px">${esc(warn)}</div>`:'')+legendBar()+gr.sheets.map((sh,si)=>{
     const u=sh.placed.reduce((s,p)=>s+p.it.A,0)/(g.w*g.h)*100;
-    return`<div class="sheetbox"><div class="hd"><b>Chapa ${si+1}</b><span>${g.w}×${g.h} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${gr.ext[si]} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div><div class="cv">${sheetSVG(sh,g)}</div></div>`}).join('')}
+    return`<div class="sheetbox"><div class="hd"><b>Chapa ${si+1}</b><span>${esc(g.w)}×${esc(g.h)} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${esc(gr.ext[si])} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div><div class="cv">${sheetSVG(sh,g)}</div></div>`}).join('')}
 function sheetSVG(sh,g,plain){
   const body=sh.placed.map(p=>{
     const col=partColor(p.it);
     return `<path transform="translate(${p.x.toFixed(1)} ${(-p.y).toFixed(1)})" d="${path(p.rings)}" fill="${plain?'none':col}" fill-opacity=".82" fill-rule="evenodd" stroke="${plain?'#000':'#1a1c20cc'}" stroke-width="${plain?.5:1.2}" vector-effect="non-scaling-stroke"><title>${esc(p.it.name)}</title></path>`;
   }).join('');
-  return `<svg viewBox="-20 ${-g.h-20} ${g.w+40} ${g.h+40}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="${-g.h}" width="${g.w}" height="${g.h}" fill="${plain?'#fff':'none'}" stroke="${plain?'#000':'currentColor'}" stroke-opacity=".5" stroke-width="2"/>${body}</svg>`;
+  return `<svg viewBox="-20 ${esc(-g.h-20)} ${esc(g.w+40)} ${esc(g.h+40)}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="${esc(-g.h)}" width="${esc(g.w)}" height="${esc(g.h)}" fill="${plain?'#fff':'none'}" stroke="${plain?'#000':'currentColor'}" stroke-opacity=".5" stroke-width="2"/>${body}</svg>`;
 }
 document.addEventListener('input',e=>{const t=e.target,pe=t.closest('.part'),ge=t.closest('.grp');
   if(t.dataset.setF==='name'){const s=S.sets.find(x=>x.id===t.dataset.set);if(s)s.name=t.value;return}
@@ -1106,8 +1144,10 @@ document.addEventListener('change',e=>{
   const pe=t.closest('.part');
   if(pe&&t.dataset.f==='groupId'){const p=S.parts[+pe.dataset.i];if(p.guest)return;moveToSet(p,t.value);if(rulesActive()){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Conjunto alterado. Encaixe de novo para a regra valer.'}render();return}
   const pr=t.closest('.grp');
+  if(pr&&t.dataset.g){render();return}
   if(pr&&t.hasAttribute('data-preset')&&t.value){const[w,hh]=t.value.split('x').map(Number);Object.assign(S.groups[pr.dataset.k],{w,h:hh});S.sheetMemory[pr.dataset.k]={w,h:hh};S.res=null;S.snap=null;S.pdf=null;render();return}
-  if(pe&&['mat','th','on','qty'].includes(t.dataset.f))render()});
+  /* depois do Tab: o foco já está no próximo campo e renderCore o devolve no campo recriado */
+  if(pe&&['mat','th','on','qty'].includes(t.dataset.f))setTimeout(render)});
 $('#tabs').onclick=e=>{const k=e.target.dataset.t;if(k){S.tab=k;render()}};
 
 /* ---------- relatório ---------- */
@@ -1245,15 +1285,15 @@ function modelHtml(m){
   for(const [a,b] of meta) h+=`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`;
   h+=`</tbody></table><p>${esc(m.rulesText)}</p><p class="note">Área líquida é a área já calculada da peça, com furos descontados. A sobra é área da chapa menos essa área e inclui margem, espaçamento, furos e região vazia.</p>`;
   if(m.legend.length){h+=`<h2>Conjuntos</h2><table><thead><tr><th>Conjunto</th><th>Qtd</th><th>Peças</th><th>Regra no encaixe</th></tr></thead><tbody>`;
-    for(const e of m.legend) h+=`<tr><td><i class="sw" style="background:${e.color}"></i>${esc(e.name)}</td><td>${e.qty}</td><td>${esc(e.names.join(', '))}</td><td>${esc(e.rule)}</td></tr>`;
+    for(const e of m.legend) h+=`<tr><td><i class="sw" style="background:${esc(e.color)}"></i>${esc(e.name)}</td><td>${esc(e.qty)}</td><td>${esc(e.names.join(', '))}</td><td>${esc(e.rule)}</td></tr>`;
     h+=`</tbody></table>`}
   for(const g of m.groups){
     h+=`<h2>${esc(g.key)}</h2><p>Comprimento ${mmxt(g.w)} mm · largura ${mmxt(g.h)} mm · ${g.sheets.length} chapa(s) · área ${m2txt(g.sheetArea)} · ocupada ${m2txt(g.occ)} · sobra ${m2txt(g.waste)} · aproveitamento ${pctxt(g.util)}</p>`;
     h+=`<table><thead><tr><th>Chapa</th><th>Comp.</th><th>Larg.</th><th>Peças</th><th>m² chapa</th><th>m² peças</th><th>Sobra</th><th>%</th><th>Usado</th></tr></thead><tbody>`;
-    for(const s of g.sheets) h+=`<tr><td>${s.n}</td><td>${mmxt(s.w)}</td><td>${mmxt(s.h)}</td><td>${s.pcs}</td><td>${m2txt(s.area)}</td><td>${m2txt(s.occ)}</td><td>${m2txt(s.waste)}</td><td>${pctxt(s.util)}</td><td>${s.extent==null?'—':mmxt(s.extent)+' mm'}</td></tr>`;
+    for(const s of g.sheets) h+=`<tr><td>${s.n}</td><td>${mmxt(s.w)}</td><td>${mmxt(s.h)}</td><td>${esc(s.pcs)}</td><td>${m2txt(s.area)}</td><td>${m2txt(s.occ)}</td><td>${m2txt(s.waste)}</td><td>${pctxt(s.util)}</td><td>${s.extent==null?'—':esc(mmxt(s.extent))+' mm'}</td></tr>`;
     h+=`<tr><th>Total</th><td></td><td></td><th>${g.sheets.reduce((a,s)=>a+s.pcs,0)}</th><th>${m2txt(g.sheetArea)}</th><th>${m2txt(g.occ)}</th><th>${m2txt(g.waste)}</th><th>${pctxt(g.util)}</th><td></td></tr></tbody></table>`;
     h+=`<table><thead><tr><th>Peça</th><th>Qtd</th><th>Encaix.</th><th>Medida</th><th>m² un.</th><th>Conjunto</th></tr></thead><tbody>`;
-    for(const p of g.parts) h+=`<tr><td><i class="sw" style="background:${p.color}"></i>${esc(p.name)}</td><td>${p.qty}</td><td>${p.placed}</td><td>${mmxt(p.w)}×${mmxt(p.h)} mm${p.holes?' · '+p.holes+' furo'+(p.holes>1?'s':''):''}</td><td>${m2txt(p.area)}</td><td>${esc(p.group)}</td></tr>`;
+    for(const p of g.parts) h+=`<tr><td><i class="sw" style="background:${esc(p.color)}"></i>${esc(p.name)}</td><td>${esc(p.qty)}</td><td>${esc(p.placed)}</td><td>${mmxt(p.w)}×${mmxt(p.h)} mm${p.holes?' · '+esc(p.holes)+' furo'+(p.holes>1?'s':''):''}</td><td>${m2txt(p.area)}</td><td>${esc(p.group)}</td></tr>`;
     h+=`</tbody></table>`;
     if(g.fail.length){h+=`<p>Fora do encaixe: ${g.fail.map(f=>esc(f.name)+' × '+f.n+' ('+(f.why==='junto'?'não coube na mesma chapa do conjunto':'não cabe na chapa')+')').join('; ')}.</p>`}
     for(const s of g.sheets){
@@ -1288,7 +1328,7 @@ function drawSheet(sh,g,mar){
   return c;
 }
 function openPreview(){
-  try{const m=reportModel();$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m);$('#modal').hidden=false;$('#modalX').focus()}
+  try{const m=reportModel();$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m);showModal('modal','#modalX')}
   catch(e){status(e.message,true)}
 }
 function generatePdf(){
@@ -1313,10 +1353,11 @@ $('#pdfGo').onclick=generatePdf;
 $('#pdfDl').onclick=downloadReady;
 $('#modalPdf').onclick=generatePdf;
 $('#modalDl').onclick=downloadReady;
-$('#modalX').onclick=()=>{$('#modal').hidden=true};
-$('#modal').onclick=e=>{if(e.target.id==='modal')$('#modal').hidden=true};
+$('#modalX').onclick=()=>hideModal('modal');
+$('#modal').onclick=e=>{if(e.target.id==='modal')hideModal('modal')};
 $('#ask').onclick=e=>{if(e.target.id==='ask'&&$('#askNo').onclick)$('#askNo').click()};
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#ask').hidden&&$('#askNo').onclick){$('#askNo').click();return}if(!$('#modal').hidden)$('#modal').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#ask').hidden&&$('#askNo').onclick){$('#askNo').click();return}
+  if(!$('#impModal').hidden){$('#impNo').click();return}if(!$('#projModal').hidden){hideModal('projModal');return}hideModal('modal')});
 
 /* ---------- PDF ---------- */
 const PW=595,PH=842,ML=40,MT=74,MB=44,CW=PW-80;

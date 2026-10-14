@@ -12,6 +12,7 @@ ser parada antes do prazo ficando com o melhor até ali.
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -29,6 +30,23 @@ FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 JOBS: dict = {}
 JOBS_LOCK = threading.Lock()
 KEEP = 600  # segundos que uma tarefa terminada fica disponível
+MAX_RUNNING = 2  # encaixes simultâneos: cada um já usa todos os núcleos
+
+
+class Busy(Exception):
+    """Já há encaixes demais rodando."""
+
+
+def _limits(payload: dict, workers: int) -> dict:
+    """O pedido vem da página: prazo finito e núcleos limitados aos da máquina."""
+    try:
+        seconds = float(payload.get("seconds", 20))
+        want = int(payload.get("workers", 0)) or workers
+    except (TypeError, ValueError):
+        raise ValueError("Tempo de otimização ou núcleos inválidos.") from None
+    if not (math.isfinite(seconds) and 0 < seconds <= 7200):
+        raise ValueError("O tempo de otimização precisa ficar entre 0 e 7200 segundos.")
+    return dict(payload, seconds=seconds, workers=max(1, min(want, os.cpu_count() or 1)))
 
 
 def find_motor() -> str | None:
@@ -64,6 +82,7 @@ def _python(payload: dict, pool, workers: int) -> dict:
 
 def nest_all(payload: dict, pool=None, workers: int = 1, motor: str = "auto") -> dict:
     """motor: "auto" (compilado se houver), "rust" (exige o compilado) ou "python"."""
+    payload = _limits(payload, workers)
     tool = find_motor() if motor != "python" else None
     if motor == "rust" and not tool:
         raise RuntimeError("Motor compilado não encontrado. Rode `cargo build --release` na pasta motor/.")
@@ -91,6 +110,8 @@ class Job:
         self.error = ""
         self.engine = "python"
         self.proc = None
+        self.timed_out = False
+        self.stopping = False
         self.stop_file = Path(tempfile.gettempdir()) / ("nest-stop-%s" % self.id)
         self.lock = threading.Lock()
         threading.Thread(target=self._run, args=(payload, pool, workers), daemon=True).start()
@@ -104,6 +125,8 @@ class Job:
                     self.result = self._rust(tool, payload, workers)
                     return
                 except Exception as exc:
+                    if self.timed_out:  # estouro de prazo é final: não refaz tudo no nest.py
+                        raise
                     print("Motor compilado falhou (%s); usando o nest.py." % exc, file=sys.stderr)
                     self.engine = "python"
             self.result = _python(payload, pool, workers)
@@ -123,31 +146,59 @@ class Job:
             progress=True,
             stop_file=str(self.stop_file),
         )
-        self.proc = subprocess.Popen(
-            [tool], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=FLAGS
-        )
-        self.proc.stdin.write(json.dumps(body).encode("utf-8"))
-        self.proc.stdin.close()
-        final = None
-        for raw in self.proc.stdout:
-            line = raw.decode("utf-8", errors="replace").strip()
-            if not line:
-                continue
-            doc = json.loads(line)
-            step = doc.get("progress") if len(doc) == 1 else None
-            if isinstance(step, dict) and "key" in step and "sheets" in step:
-                with self.lock:
-                    self.best[step.pop("key")] = step
-                    self.rev += 1
-            else:
-                final = doc
-        err = self.proc.stderr.read().decode("utf-8", errors="replace").strip()
-        if self.proc.wait() != 0 or final is None:
+        # stderr num arquivo: um PIPE cheio sem leitor travaria o motor e esta thread
+        with tempfile.TemporaryFile() as errf:
+            self.proc = subprocess.Popen(
+                [tool], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errf, creationflags=FLAGS
+            )
+            # prazo: motor travado é morto e o erro fica registrado
+            late = threading.Event()
+            limit = self.seconds * 3 + 60
+            timer = threading.Timer(limit, lambda: (late.set(), self.proc.kill()))
+            timer.start()
+            final = None
+            try:
+                try:
+                    self.proc.stdin.write(json.dumps(body).encode("utf-8"))
+                    self.proc.stdin.close()
+                except OSError as exc:  # motor morreu antes de ler a entrada: o motivo está no stderr
+                    self.proc.kill()
+                    self.proc.wait()
+                    errf.seek(0)
+                    err = errf.read().decode("utf-8", errors="replace").strip()
+                    raise RuntimeError(err or "motor compilado fechou a entrada (%s)" % exc) from exc
+                for raw in self.proc.stdout:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    doc = json.loads(line)
+                    step = doc.get("progress") if len(doc) == 1 else None
+                    if isinstance(step, dict) and "key" in step and "sheets" in step:
+                        with self.lock:
+                            self.best[step.pop("key")] = step
+                            self.rev += 1
+                    else:
+                        final = doc
+                timer.cancel()
+                code = self.proc.wait()
+            except BaseException:
+                self.proc.kill()
+                self.proc.wait()
+                raise
+            finally:
+                timer.cancel()
+            errf.seek(0)
+            err = errf.read().decode("utf-8", errors="replace").strip()
+        if late.is_set() and code != 0:  # código 0: o timer disparou depois de o motor terminar bem
+            self.timed_out = True
+            raise RuntimeError("motor compilado passou do prazo de %.0f s e foi encerrado" % limit)
+        if code != 0 or final is None:
             raise RuntimeError(err or "motor compilado falhou")
         return final
 
     def stop(self) -> None:
         """Pede ao motor para fechar com o melhor até agora (só o compilado atende)."""
+        self.stopping = True
         try:
             self.stop_file.touch()
         except OSError:
@@ -173,11 +224,14 @@ class Job:
 
 
 def start(payload: dict, pool=None, workers: int = 1) -> Job:
-    job = Job(payload, pool, workers)
+    payload = _limits(payload, workers)
     now = time.time()
     with JOBS_LOCK:
         for key in [k for k, j in JOBS.items() if j.ended and now - j.ended > KEEP]:
             del JOBS[key]
+        if sum(1 for j in JOBS.values() if j.ended is None and not j.stopping) >= MAX_RUNNING:
+            raise Busy("Já há %d encaixes rodando: espere um terminar ou pare um deles." % MAX_RUNNING)
+        job = Job(payload, pool, workers)
         JOBS[job.id] = job
     return job
 

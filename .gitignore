@@ -11,3 +11,6 @@ tests/package*.json
 
 # motor compilado: só o código-fonte vai para o repositório
 motor/target/
+
+# artefatos do graphify (gerados localmente)
+graphify-out/
