@@ -4,163 +4,274 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Encaixe · Chapa</title>
+<meta name="theme-color" content="#101720">
 <style>
-:root{--bg:#0d0f12;--p1:#14171c;--p2:#1b1f26;--p3:#232933;--ln:#2a303a;--tx:#e9e6df;--mu:#8b93a1;--ac:#ff6a1a;--ac2:#ffb27a;--ok:#4cd08a;--bad:#ff5d5d;--warn:#f7d154;
---r:8px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;
---mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;--sans:"Bahnschrift","Segoe UI Variable","Segoe UI",system-ui,sans-serif;color-scheme:dark}
-@media(prefers-color-scheme:light){:root{--bg:#eceae4;--p1:#f7f6f2;--p2:#fff;--p3:#efede6;--ln:#d3d0c7;--tx:#1a1c20;--mu:#5f6673;--ac:#e24e00;--ac2:#b53b00;--warn:#9a6b00;color-scheme:light}}
+/* ---------- tokens ---------- */
+:root{--bg:#0b0f14;--bg2:#101720;--sf:#151d27;--sf2:#1b2633;--sf3:#243244;--ln:#283444;--ln2:#3a4a60;--fld:#0d131b;--sheet:#1b2633;
+--tx:#f1f5f9;--mu:#9aa9ba;--ac:#38bdf8;--alt:#6366f1;--on:#04121c;--ok:#34d399;--warn:#fbbf24;--bad:#fb7185;
+--r:8px;--r2:6px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;
+--rail:216px;--railmin:64px;--panel:380px;--top:56px;
+--ease:cubic-bezier(.2,.8,.2,1);--sh:0 16px 40px rgba(0,0,0,.45);
+--sans:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color-scheme:dark}
+/* ---------- base ---------- */
 [hidden]{display:none!important}
 *{box-sizing:border-box;margin:0}html,body{height:100%}
-body{background:var(--bg);color:var(--tx);font:13px/1.45 var(--sans);display:grid;grid-template-rows:52px 1fr;overflow:hidden}
-header{display:flex;align-items:center;gap:var(--s3);padding:0 var(--s4);border-bottom:1px solid var(--ln);background:var(--p1)}
-.logo{font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px;white-space:nowrap}.logo b{color:var(--ac)}
-.projbar{display:flex;align-items:center;gap:var(--s2);min-width:0}header button{white-space:nowrap}.projbar select{width:clamp(160px,24vw,300px);font-weight:600}
-header .sp{flex:1}.kpi{font:12px var(--mono);color:var(--mu);white-space:nowrap}.kpi b{color:var(--tx);font-weight:600}
-.saved{font-size:11px;color:var(--mu);white-space:nowrap}.saved.ok{color:var(--ok)}.saved.bad{color:var(--bad)}
-main{display:grid;grid-template-columns:minmax(300px,360px) 1fr minmax(280px,320px);min-height:0}
-aside,.mid{min-height:0;overflow:auto}.mid{scroll-margin-top:60px;min-width:0}
-aside{background:var(--p1);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3)}
-aside.l{border-right:1px solid var(--ln)}aside.r{border-left:1px solid var(--ln)}
-.sec{border:1px solid var(--ln);border-radius:var(--r);background:var(--p2);display:flex;flex-direction:column;min-width:0;flex:0 0 auto}
-.sec>summary,.sec>.sh{list-style:none;display:flex;align-items:center;gap:var(--s2);padding:10px var(--s3);cursor:pointer;font-weight:600;font-size:12.5px}
-.sec>summary::-webkit-details-marker{display:none}
-.sec>summary::after{content:"▾";margin-left:auto;color:var(--mu);font-size:11px;transition:transform .15s}
-.sec:not([open])>summary::after{transform:rotate(-90deg)}
-.sec .body{padding:0 var(--s3) var(--s3);display:flex;flex-direction:column;gap:10px}
-.step{width:20px;height:20px;border-radius:50%;background:var(--p3);border:1px solid var(--ln);display:grid;place-items:center;font:600 11px var(--mono);color:var(--mu);flex:0 0 auto}
-.sec[open]>summary .step,.sec.go .step{background:var(--ac);border-color:var(--ac);color:#140900}
-.sec .cnt{font:11px var(--mono);color:var(--mu);font-weight:400}
-/* Seções recolhidas dentro de um painel: seta e realce para ficar claro que abrem ao clicar. */
-details:not(.sec)>summary.sub{list-style:none;justify-content:flex-start;gap:6px;padding:6px 8px;border:1px solid var(--ln);border-radius:6px;color:var(--tx)}
-details:not(.sec)>summary.sub::-webkit-details-marker{display:none}
-details:not(.sec)>summary.sub::before{content:"▸";color:var(--ac)}details[open]:not(.sec)>summary.sub::before{content:"▾"}
-details:not(.sec)>summary.sub:hover{border-color:var(--ac)}
-.sub{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);font-weight:600;display:flex;justify-content:space-between;gap:var(--s2)}
-button,select,input{font:inherit;color:inherit}
-button{background:var(--p3);border:1px solid var(--ln);border-radius:6px;padding:6px 10px;cursor:pointer}
-button:hover:not(:disabled){border-color:var(--ac)}button.pri{background:var(--ac);border-color:var(--ac);color:#140900;font-weight:700}
-button.pri:hover:not(:disabled){filter:brightness(1.08)}button:disabled{opacity:.4;cursor:not-allowed}
-button.danger{border-color:var(--bad);color:var(--bad);background:transparent}
-button.danger:hover{background:color-mix(in srgb,var(--bad) 12%,transparent)}
-input,select{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:5px 8px;width:100%;min-width:0}
-input[type=checkbox]{width:auto}input:focus,select:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
-input[type=color]{width:30px;height:26px;padding:2px;flex:0 0 auto}
-.drop{border:1.5px dashed var(--ln);border-radius:var(--r);padding:16px 12px;text-align:center;color:var(--mu);cursor:pointer;transition:.15s}
-.drop.on,.drop:hover{border-color:var(--ac);color:var(--tx);background:color-mix(in srgb,var(--ac) 8%,transparent)}
-.drop b{display:block;color:var(--tx);font-size:14px;margin-bottom:2px}.drop.off{opacity:.55}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);align-items:end}.f{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--mu)}
-.f.chk{flex-direction:row;align-items:center;gap:6px;font-size:12px}
-.btns{display:flex;flex-wrap:wrap;gap:6px}.btns button{flex:1 1 calc(50% - 6px)}
-.parts{display:flex;flex-direction:column;gap:6px}
-.part{display:grid;grid-template-columns:20px 46px minmax(0,1fr);gap:8px;align-items:center;background:var(--p2);border:1px solid var(--ln);border-radius:6px;padding:8px}
-.part.off{opacity:.45}.part.pick{border-color:var(--ac)}.part.pend{border-left:3px solid var(--warn)}.part svg{width:46px;height:36px;background:var(--bg);border-radius:3px}
+html{scrollbar-color:var(--ln2) transparent;scrollbar-width:thin}
+body{background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nums;overflow:hidden;-webkit-tap-highlight-color:transparent}
+.ic{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+@keyframes fade{from{opacity:0}}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}}
+@keyframes toast{from{opacity:0;transform:translate(-50%,10px)}}
+@keyframes pulse{50%{opacity:.35;transform:scale(.7)}}
+/* ---------- estrutura: barra lateral, topo, painel e visualizador ---------- */
+.app{height:100%;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.rail{grid-row:1/-1;width:var(--rail);background:var(--bg2);border-right:1px solid var(--ln);display:flex;flex-direction:column;gap:var(--s4);padding:var(--s3);position:relative;z-index:25;transition:width .2s var(--ease)}
+.brand{display:flex;align-items:center;gap:10px;height:32px;padding:0 6px;color:var(--ac);overflow:hidden}
+.brand .ic{width:24px;height:24px;stroke-width:2}
+.logo{font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--tx)}.logo b{color:var(--ac);font-weight:500;margin:0 .2em}
+.navgrp{display:flex;flex-direction:column;gap:2px}
+.navlbl{font-size:12px;font-weight:600;color:var(--mu);padding:0 10px 6px;white-space:nowrap;overflow:hidden}
+.nav{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;height:38px;padding:0 10px;background:transparent;border:1px solid transparent;color:var(--mu);font-weight:500;text-align:left;white-space:nowrap}
+.nav span{overflow:hidden;text-overflow:ellipsis}
+.nav::before{content:"";position:absolute;left:-13px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--ac);transform:scaleY(0);transition:transform .2s var(--ease)}
+.nav:hover:not(:disabled){background:var(--sf);border-color:transparent;color:var(--tx)}
+.nav.on,.nav.on:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac)}.nav.on::before{transform:scaleY(1)}
+.railend{margin-top:auto}
+.top{min-height:var(--top);display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);padding:var(--s2) var(--s4);background:var(--bg2);border-bottom:1px solid var(--ln)}
+.crumb{display:flex;align-items:center;gap:6px;color:var(--mu);font-size:13px;white-space:nowrap}.crumb .ic{width:14px;height:14px}
+.projbar{display:flex;align-items:center;gap:var(--s2);min-width:0}.top button{white-space:nowrap}.projbar select{width:clamp(160px,22vw,300px);font-weight:600}
+.top .sp{flex:1}
+.kpi{font-size:13px;color:var(--mu);white-space:nowrap;padding:5px 12px;border:1px solid var(--ln);border-radius:99px;background:var(--sf)}.kpi b{color:var(--tx);font-weight:650;font-size:15px}
+.saved{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu);white-space:nowrap}
+.saved:not(:empty)::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.saved.ok{color:var(--ok)}.saved.bad{color:var(--bad)}
+#go{padding:8px 22px;font-size:14px}
+main{display:grid;grid-template-columns:var(--panel) minmax(0,1fr);min-height:0}main.nopanel{grid-template-columns:minmax(0,1fr)}
+.panel,.mid{min-height:0;overflow:auto}.mid{min-width:0;scroll-margin-top:64px;display:flex;flex-direction:column}
+.panel{background:var(--bg2);border-right:1px solid var(--ln);padding:var(--s4);display:flex;flex-direction:column;gap:var(--s5)}main.nopanel .panel{display:none}
+.sec{display:flex;flex-direction:column;gap:var(--s3);min-width:0;flex:0 0 auto;animation:in .22s var(--ease)}
+.sh{display:flex;align-items:center;gap:var(--s2);min-height:28px}.sh .ic{color:var(--ac)}
+.sh h2{font-size:16px;font-weight:650;letter-spacing:-.01em}
+.sec .body{display:flex;flex-direction:column;gap:var(--s3)}
+.sec .cnt{margin-left:auto;font-size:12.5px;color:var(--mu);text-align:right}
+/* Seções recolhidas dentro de um painel: seta e contorno para ficar claro que abrem ao clicar. */
+details>summary.sub{list-style:none;cursor:pointer;justify-content:flex-start;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--ln);border-radius:var(--r2);background:var(--sf);color:var(--tx);transition:border-color .15s,background-color .15s}
+details>summary.sub::-webkit-details-marker{display:none}
+details>summary.sub::before{content:"";width:6px;height:6px;border:solid var(--ac);border-width:0 1.75px 1.75px 0;transform:rotate(-45deg);transition:transform .18s var(--ease)}
+details[open]>summary.sub::before{transform:rotate(45deg) translate(-1px,-1px)}
+details>summary.sub:hover{border-color:var(--ln2);background:var(--sf2)}
+.sub{font-size:13px;color:var(--mu);font-weight:600;display:flex;justify-content:space-between;gap:var(--s2)}
+.subbody{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s2)}details[open]>.subbody{animation:in .18s var(--ease)}
+/* ---------- controles ---------- */
+button,select,input{font:inherit;font-variant-numeric:inherit;color:inherit}
+button{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);background:var(--sf2);border:1px solid var(--ln);border-radius:var(--r2);padding:7px 12px;cursor:pointer;font-weight:500;touch-action:manipulation;transition:background-color .15s,border-color .15s,color .15s,transform .1s}
+button:hover:not(:disabled){background:var(--sf3);border-color:var(--ln2)}button:active:not(:disabled){transform:scale(.97)}
+button.pri{background:var(--ac);border-color:var(--ac);color:var(--on);font-weight:650}
+button.pri:hover:not(:disabled){background:#7dd3fc;border-color:#7dd3fc}button:disabled{opacity:.4;cursor:not-allowed}
+button.danger{background:color-mix(in srgb,var(--bad) 10%,transparent);border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
+button.danger:hover:not(:disabled){background:color-mix(in srgb,var(--bad) 20%,transparent);border-color:var(--bad)}
+button.icon{width:34px;height:34px;padding:0}
+input,select{background:var(--fld);border:1px solid var(--ln);border-radius:var(--r2);padding:7px 10px;width:100%;min-width:0;transition:border-color .15s,box-shadow .15s}
+input:hover,select:hover{border-color:var(--ln2)}select option{background:var(--sf);color:var(--tx)}
+input::placeholder{color:color-mix(in srgb,var(--mu) 70%,transparent)}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--ac);flex:0 0 auto}
+input:focus-visible,select:focus-visible{outline:0;border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 25%,transparent)}
+button:focus-visible,summary:focus-visible,input[type=checkbox]:focus-visible{outline:2px solid var(--ac);outline-offset:2px;box-shadow:none}
+input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointer}
+.drop{display:block;border:1.5px dashed var(--ln2);border-radius:var(--r);padding:28px 16px;text-align:center;color:var(--mu);background:var(--sf);cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.drop.on,.drop:hover{border-color:var(--ac);color:var(--tx);background:color-mix(in srgb,var(--ac) 8%,var(--sf))}
+.drop b{display:block;color:var(--tx);font-size:16px;font-weight:650;margin-bottom:4px}.drop.off{opacity:.55}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3) var(--s2);align-items:end}.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--mu)}
+.f input,.f select{font-size:14px;color:var(--tx)}
+.f.chk{flex-direction:row;align-items:center;gap:8px;font-size:13.5px;color:var(--tx);cursor:pointer}
+.btns{display:flex;flex-wrap:wrap;gap:var(--s2)}.btns button{flex:1 1 calc(50% - 8px)}.btns button.full{flex-basis:100%}
+.msg{font-size:13px;line-height:1.5;color:var(--mu)}.msg:empty{display:none}.msg.w{color:var(--warn)}.msg.ok{color:var(--ok)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;flex:0 0 auto}
+.tag{display:inline-block;font-size:12px;font-weight:500;line-height:1.55;padding:0 7px;border-radius:99px;background:var(--sf2);border:1px solid var(--ln);color:var(--mu);margin-left:6px}
+.tag.pend{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.tag.inf{color:#a5b4fc;background:color-mix(in srgb,var(--alt) 14%,transparent);border-color:color-mix(in srgb,var(--alt) 40%,transparent)}
+/* ---------- cartões do painel: peças, modelos, chapas, presets ---------- */
+.parts{display:flex;flex-direction:column;gap:var(--s2)}
+.part,.grp,.setcard,.pair{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r)}
+.part{display:grid;grid-template-columns:18px 56px minmax(0,1fr);gap:8px 10px;align-items:center;padding:10px;transition:border-color .15s}
+.part:hover{border-color:var(--ln2)}.part.off{opacity:.45}.part.pick{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 7%,var(--sf))}.part.pend{box-shadow:inset 3px 0 0 var(--warn)}
+.part svg{width:56px;height:42px;background:var(--fld);border-radius:4px}
 .part .n{font-weight:600;display:flex;align-items:center;flex-wrap:wrap;row-gap:2px;overflow-wrap:anywhere}
-.part .m{font:11px var(--mono);color:var(--mu);overflow-wrap:anywhere}
-.tag{display:inline-block;font:10.5px var(--mono);padding:0 5px;border-radius:3px;border:1px solid var(--ln);color:var(--mu);margin-left:4px}
-.tag.pend{color:var(--warn);border-color:var(--warn)}.tag.inf{color:var(--ac2)}
-.part .c{grid-column:1/-1;display:grid;grid-template-columns:60px minmax(0,1fr) 68px;gap:6px;align-items:center}
-.part .c2{grid-column:1/-1;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--mu)}.part .c2 select{padding:5px 6px;width:auto;flex:1 1 90px;min-width:0}.part .c2 button{padding:4px 10px}
-.part .c label,.part .c2 label{font-size:11px;color:var(--mu);display:flex;gap:3px;align-items:center;white-space:nowrap}
-.tabs{display:flex;gap:6px;padding:12px var(--s4) 0;flex-wrap:wrap;border-bottom:1px solid var(--ln)}
-.tab{border-radius:6px 6px 0 0;border-bottom:2px solid transparent;background:none;border-top:0;border-inline:0;color:var(--mu);padding:6px 10px}
-.tab.on{color:var(--tx);border-bottom-color:var(--ac)}.tabs:empty{display:none}
-.stage{padding:var(--s3) var(--s4) var(--s4)}.sheetbox{background:var(--p1);border:1px solid var(--ln);border-radius:var(--r);padding:var(--s3);margin-bottom:var(--s4)}
-.sheetbox .hd{display:flex;gap:12px;align-items:center;font:12px var(--mono);color:var(--mu);margin-bottom:8px;flex-wrap:wrap}
-.sheetbox .hd b{color:var(--tx)}.bar{height:5px;width:90px;background:var(--ln);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
-.sheetbox svg{width:100%;height:auto;max-height:62vh;display:block;background:linear-gradient(var(--bg) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,var(--bg) 1px,transparent 1px) 0 0/40px 40px,var(--p2)}
-.empty{min-height:50vh;display:block;align-content:center;color:var(--mu);text-align:center;padding:30px;line-height:1.7}
-.grp,.setcard,.preset-item{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:8px}
-.grp,.setcard{display:flex;flex-direction:column;gap:6px;min-width:0}.setcard .m,.grp .t,.msg,.pair{overflow-wrap:anywhere}
-.prog{display:flex;flex-direction:column;gap:6px}.prog[hidden]{display:none}
-.pbar{height:6px;background:var(--ln);border-radius:3px;overflow:hidden}.pbar i{display:block;height:100%;width:0;background:var(--ac);transition:width .5s linear}
-#go{position:sticky;bottom:8px;z-index:5;box-shadow:0 0 0 8px var(--p2)}
-.grp .t,.setcard .top{font-weight:600}.grp .t span,.setcard .m{font:11px var(--mono);color:var(--mu);font-weight:400}
-.grp .row3{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:end}
-.setcard .top{display:flex;gap:6px;align-items:center}.setcard .top input[type=text]{flex:1}
-.setcard .flags{display:flex;flex-direction:column;gap:3px}.setcard .flags label{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--mu)}
-.msg{font-size:12px;color:var(--mu)}.msg:empty{display:none}.msg.w{color:var(--ac2)}.msg.ok{color:var(--ok)}
-.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;flex:0 0 auto;border:1px solid #0006}
-.pal{display:flex;flex-wrap:wrap;gap:4px}.pal button{width:24px;height:24px;padding:0;border-radius:5px}.pal button.on{outline:2px solid var(--tx);outline-offset:1px}
-.preset-list{display:flex;flex-direction:column;gap:4px;max-height:148px;overflow:auto}
-.preset-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;cursor:pointer}
-.preset-item.on{border-color:var(--ac)}.preset-item span{font:11px var(--mono);color:var(--mu);font-weight:400}
-.legend-bar{display:flex;flex-wrap:wrap;gap:6px 12px;margin:0 0 10px}.lg{display:inline-flex;align-items:center;font-size:12px;color:var(--mu)}.lg b{color:var(--tx);font-weight:600;margin-left:4px}
-.pair{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;background:var(--bg);border:1px solid var(--ln);border-radius:5px;padding:4px 6px}
-.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:16px}.modal[hidden]{display:none}
-.modal .box{width:min(980px,100%);max-height:min(92vh,980px);overflow:auto;background:var(--p1);border:1px solid var(--ln);border-radius:10px;padding:var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
+.part .m{font-size:12.5px;color:var(--mu);overflow-wrap:anywhere}
+.part .c{grid-column:1/-1;display:grid;grid-template-columns:68px minmax(0,1fr) 76px;gap:6px;align-items:center}
+.part .c2{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--mu)}.part .c2 select{padding:6px 8px;width:auto;flex:1 1 90px;min-width:0}.part .c2 button{padding:5px 10px}
+.part .c label,.part .c2 label{font-size:12.5px;color:var(--mu);display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer}
+.grp,.setcard{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px}.setcard .m,.grp .t,.msg,.pair{overflow-wrap:anywhere}
+.grp .t,.setcard .top{font-weight:600}.grp .t span,.setcard .m{font-size:12.5px;color:var(--mu);font-weight:400}.grp .t span{margin-left:6px}
+.grp .row3{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
+.setcard .top{display:flex;gap:8px;align-items:center}.setcard .top input[type=text]{flex:1;font-weight:600}
+.setcard .flags{display:flex;flex-direction:column;gap:6px}.setcard .flags label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mu);cursor:pointer}
+.pair{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;padding:6px 6px 6px 10px}
+.preset-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto}
+.preset-item{flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:9px 12px;background:var(--sf);text-align:left}
+.preset-item.on,.preset-item.on:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--sf))}.preset-item span{font-size:12.5px;color:var(--mu);font-weight:400}
+.proj{display:flex;flex-direction:column;gap:8px;background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);padding:10px 12px;transition:border-color .15s}
+.proj:hover{border-color:var(--ln2)}.proj.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 7%,var(--sf))}.proj.lk{border-color:color-mix(in srgb,var(--alt) 70%,transparent)}
+.projopen{flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:0;background:none;border:0;text-align:left}
+.projopen:hover:not(:disabled){background:none}.projopen b{font-size:15px}.projopen span{font-size:12.5px;color:var(--mu);font-weight:400;overflow-wrap:anywhere}.projopen span:empty{display:none}
+.proj .tag,.top .tag{margin:0;align-self:flex-start}.top .tag{align-self:center}.tag.on{color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent);border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
+.part.guest{border-style:dashed}
+/* ---------- visualizador ---------- */
+.viewbar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:var(--s3);padding:10px var(--s4);background:color-mix(in srgb,var(--bg) 92%,transparent);border-bottom:1px solid var(--ln)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.tab{background:transparent;color:var(--mu);font-weight:600;border-radius:99px;padding:6px 14px}
+.tab.on,.tab.on:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 14%,transparent);border-color:color-mix(in srgb,var(--ac) 55%,transparent);color:var(--ac)}
+.zoom{display:flex;align-items:center;gap:4px;margin-left:auto}.zoom output{min-width:66px;text-align:center;font-size:13px;color:var(--mu)}
+.runbar{display:flex;flex-direction:column;gap:var(--s2);padding:10px var(--s4);background:var(--bg2);border-bottom:1px solid var(--ln)}
+.runbar:not(:has(.prog:not([hidden]))):has(#nmsg:empty){display:none}
+.prog{display:grid;grid-template-columns:auto minmax(80px,1fr) auto;align-items:center;gap:var(--s2) var(--s3)}.prog[hidden]{display:none}
+.prog::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ac);animation:pulse 1.2s ease-in-out infinite}
+.prog .msg{grid-column:1/3;grid-row:2}.prog button{grid-row:1/3;grid-column:3}
+.pbar{height:6px;background:var(--sf2);border-radius:3px;overflow:hidden}.pbar i{display:block;height:100%;width:0;background:var(--ac);border-radius:3px;transition:width .5s linear}
+.stage{padding:var(--s4) var(--s5) var(--s5);flex:1}
+.legend-bar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 var(--s4)}
+.lg{display:inline-flex;align-items:center;font-size:13px;color:var(--mu);padding:4px 10px;border:1px solid var(--ln);border-radius:99px;background:var(--sf)}.lg b{color:var(--tx);font-weight:650;margin-left:6px}
+.sheetbox{margin-bottom:var(--s5);background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);overflow:hidden}
+.sheetbox .hd{display:flex;gap:6px var(--s4);align-items:center;font-size:13px;color:var(--mu);padding:10px 14px;border-bottom:1px solid var(--ln);flex-wrap:wrap}
+.sheetbox .hd b{color:var(--tx);font-size:15px;font-weight:650}
+.bar{margin-left:auto;height:6px;width:140px;background:var(--sf3);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok);border-radius:3px}
+/* A chapa nunca é esticada: a largura muda com o zoom e a altura acompanha a proporção do desenho. */
+.cv{overflow:auto;background:var(--bg);padding:var(--s3)}.zoomed .cv{max-height:calc(100vh - 190px)}
+.cv svg{display:block;width:calc(100% * var(--z,1));height:auto;max-height:calc(100vh - 230px);min-height:160px}.zoomed .cv svg{max-height:none}
+.cv svg>rect{fill:var(--sheet);stroke:var(--ln2);stroke-opacity:1;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.cv svg path{transition:fill-opacity .12s}.cv svg path:hover{fill-opacity:1;stroke:#fff;stroke-width:2}
+.empty{min-height:56vh;display:block;align-content:center;color:var(--mu);text-align:center;padding:32px;font-size:15px;line-height:1.6;text-wrap:balance}
+.empty b{display:block;color:var(--tx);font-size:22px;font-weight:650;line-height:1.3;letter-spacing:-.015em;margin-bottom:var(--s2)}
+/* ---------- modais, tabela de revisão, relatório e avisos ---------- */
+.modal{position:fixed;inset:0;z-index:40;background:rgba(4,8,12,.72);display:grid;place-items:center;padding:16px;overscroll-behavior:contain;animation:fade .16s}.modal[hidden]{display:none}
+.modal .box{width:min(980px,100%);max-height:min(92vh,980px);overflow:auto;overscroll-behavior:contain;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4);box-shadow:var(--sh);animation:pop .22s var(--ease)}
 .modal .box.ask{width:min(480px,100%)}.modal .box.sm{width:min(460px,100%)}
-.modal-hd{display:flex;justify-content:space-between;align-items:center;gap:8px}.modal h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase}
-.tblwrap{overflow:auto;border:1px solid var(--ln);border-radius:6px}
-table.rev{width:100%;border-collapse:collapse;font-size:12px}
-table.rev th,table.rev td{padding:6px 8px;border-bottom:1px solid var(--ln);text-align:left;vertical-align:middle;white-space:nowrap}
-table.rev th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);background:var(--p2);position:sticky;top:0}
-table.rev td input,table.rev td select{width:100%;min-width:90px}table.rev td select{min-width:150px}table.rev td input+.tag{display:table;margin:3px 0 0}table.rev td.wide{white-space:normal;min-width:120px}
-.paper{background:#f4f1ea;color:#1c1a16;padding:16px;border-radius:6px}.paper h2{font-size:15px;margin:16px 0 6px;letter-spacing:0;text-transform:none;color:#1c1a16}.paper h2:first-child{margin-top:0}
-.paper p{margin:0 0 6px;font-size:12.5px}.paper table{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 8px}
-.paper th,.paper td{border:1px solid #d5d0c6;padding:4px 6px;vertical-align:top;text-align:left}
-.paper th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#5c574e;background:#e7e2d8}.paper .note{color:#5c574e;font-size:11.5px}
-.sheetcanvas{width:100%;height:auto;background:#fff;border:1px solid #d5d0c6;border-radius:4px;margin:4px 0 12px}
-.toast{position:fixed;z-index:60;bottom:14px;left:50%;transform:translateX(-50%);background:var(--p1);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;max-width:min(520px,92vw);box-shadow:0 8px 24px #0006}
-.toast[hidden]{display:none}.toast.ok{border-color:var(--ok)}.toast.bad{border-color:var(--bad)}
-#askText{white-space:pre-line}
-/* Até 1100px a página inteira rola: peças fixas à esquerda, resultado e ajustes à direita. */
-@media(max-width:1100px){
-html,body{height:auto}body{display:block;overflow:visible}
-header{position:sticky;top:0;z-index:20;min-height:52px}
-main{grid-template-columns:minmax(280px,340px) minmax(0,1fr);grid-template-areas:"l m" "l r";align-items:start}
-aside.l{grid-area:l;position:sticky;top:52px;height:calc(100vh - 52px);height:calc(100dvh - 52px)}
-.mid{grid-area:m;overflow:visible}
-aside.r{grid-area:r;overflow:visible;border-left:0;border-top:1px solid var(--ln);display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:start}
-.empty{min-height:30vh}}
-/* Celular: uma coluna só, na ordem das etapas, com alvos de toque maiores. */
+.modal-hd{display:flex;justify-content:space-between;align-items:center;gap:8px}.modal h2{font-size:18px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
+#askText{white-space:pre-line;font-size:15px;line-height:1.55}
+.tblwrap{overflow:auto;border:1px solid var(--ln);border-radius:var(--r);background:var(--bg2)}
+table.rev{width:100%;border-collapse:collapse;font-size:13px}
+table.rev th,table.rev td{padding:9px 12px;border-bottom:1px solid var(--ln);text-align:left;vertical-align:middle;white-space:nowrap}
+table.rev tr:last-child td{border-bottom:0}table.rev tbody tr:hover{background:var(--sf)}
+table.rev th{font-size:12.5px;font-weight:600;color:var(--mu);background:var(--sf2);position:sticky;top:0;z-index:1}
+table.rev td input,table.rev td select{width:100%;min-width:90px}table.rev td select{min-width:150px}table.rev td input+.tag{display:table;margin:4px 0 0}table.rev td.wide{white-space:normal;min-width:120px}
+.paper{background:#fff;color:#16181b;padding:20px;border-radius:4px}.paper h2{font-size:16px;letter-spacing:0;margin:18px 0 8px;color:#16181b}.paper h2:first-child{margin-top:0}
+.paper p{margin:0 0 6px;font-size:13px}.paper table{width:100%;border-collapse:collapse;font-size:12.5px;margin:0 0 8px}
+.paper th,.paper td{border:1px solid #d4d8dc;padding:5px 7px;vertical-align:top;text-align:left}
+.paper th{font-size:12px;font-weight:600;color:#4d5761;background:#eceff1}.paper .note{color:#4d5761;font-size:12px}
+.sheetcanvas{width:100%;height:auto;background:#fff;border:1px solid #d4d8dc;border-radius:2px;margin:4px 0 12px}
+.toast{position:fixed;z-index:60;bottom:20px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:var(--sf2);border:1px solid var(--ln2);border-radius:var(--r);padding:10px 14px;max-width:min(520px,92vw);box-shadow:var(--sh);animation:toast .22s var(--ease)}
+.toast[hidden]{display:none}.toast::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mu);flex:0 0 auto}
+.toast.ok{border-color:color-mix(in srgb,var(--ok) 55%,transparent)}.toast.ok::before{background:var(--ok)}.toast.bad{border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.toast.bad::before{background:var(--bad)}
+/* ---------- barra lateral recolhida (por botão ou por largura) e dicas ---------- */
+.app.rail-min .rail{width:var(--railmin)}
+.app.rail-min .logo,.app.rail-min .navlbl,.app.rail-min .nav span{display:none}.app.rail-min .nav{justify-content:center;padding:0}
+.app.rail-min .nav[data-tip]:hover::after,.app.rail-min .nav[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);background:var(--sf2);border:1px solid var(--ln2);border-radius:var(--r2);padding:5px 10px;color:var(--tx);font-size:13px;font-weight:500;white-space:nowrap;box-shadow:var(--sh);pointer-events:none;animation:fade .12s}
+@media(max-width:1359px){
+.app:not(.rail-max) .rail{width:var(--railmin)}
+.app:not(.rail-max) .logo,.app:not(.rail-max) .navlbl,.app:not(.rail-max) .nav span{display:none}.app:not(.rail-max) .nav{justify-content:center;padding:0}
+.app:not(.rail-max) .nav[data-tip]:hover::after,.app:not(.rail-max) .nav[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);background:var(--sf2);border:1px solid var(--ln2);border-radius:var(--r2);padding:5px 10px;color:var(--tx);font-size:13px;font-weight:500;white-space:nowrap;box-shadow:var(--sh);pointer-events:none;animation:fade .12s}}
+@media(max-width:1100px){:root{--panel:320px}.crumb{display:none}.stage{padding:var(--s3) var(--s4) var(--s4)}}
+/* Celular: uma coluna só, navegação fixa embaixo e alvos de toque maiores. */
 @media(max-width:760px){
-main{display:block}
-header{position:static;flex-wrap:wrap;padding:8px var(--s3);row-gap:6px}header .sp{display:none}
-.projbar{flex:1 1 220px}.projbar select{width:auto;flex:1}.kpi{white-space:normal}
-aside.l{position:static;height:auto;overflow:visible;border-right:0}
-aside.r{display:flex}
-.empty{min-height:120px;padding:20px}
-.stage{padding:var(--s3)}.tabs{padding:8px var(--s3) 0}
-button,select,input:not([type=checkbox]):not([type=color]){min-height:38px}input:not([type=checkbox]):not([type=color]),select{font-size:16px}
-input[type=checkbox]{width:18px;height:18px}input[type=color]{width:38px;height:38px}
-.pal{gap:6px}.pal button{width:34px;height:34px;min-height:0}
-.part .c{grid-template-columns:72px minmax(0,1fr) 80px}.part .c2{gap:8px}
-.modal{padding:8px}.modal .box{padding:var(--s3);max-height:94vh;max-height:94dvh}
-.toast{left:8px;right:8px;transform:none;max-width:none;text-align:center}
+html,body{height:auto}body{overflow:visible;padding-bottom:64px}
+.app{display:block}
+.app .rail,.app:not(.rail-max) .rail{position:fixed;inset:auto 0 0 0;width:auto;height:64px;flex-direction:row;align-items:stretch;gap:0;padding:6px;border-right:0;border-top:1px solid var(--ln);z-index:30}
+.brand,.railend,.app .navlbl,.app:not(.rail-max) .navlbl{display:none}.navgrp{display:contents}
+.app .nav,.app:not(.rail-max) .nav{flex:1 1 0;min-width:0;height:auto;flex-direction:column;justify-content:center;gap:3px;padding:0 2px;font-size:11.5px}
+.app .nav span,.app:not(.rail-max) .nav span{display:block;max-width:100%}.nav::before{display:none}
+.app .nav[data-tip]::after{content:none!important}
+.top{padding:var(--s2) var(--s3)}.top .sp{display:none}.projbar{flex:1 1 220px}.projbar select{width:auto;flex:1}.kpi{white-space:normal;border-radius:var(--r)}#go{flex:1 1 100%}
+main,main.nopanel{display:block}.panel{border-right:0;border-bottom:1px solid var(--ln);padding:var(--s3)}.panel,.mid{overflow:visible}
+.viewbar{padding:8px var(--s3)}.stage{padding:var(--s3)}.runbar{padding:8px var(--s3)}
+.prog{grid-template-columns:auto minmax(0,1fr)}.prog .msg{grid-column:1/-1}.prog button{grid-row:auto;grid-column:1/-1}
+.empty{min-height:160px;padding:20px}.empty b{font-size:19px}.bar{width:80px}
+.cv svg{max-height:none}.zoomed .cv{max-height:70vh}
+button,select,input:not([type=checkbox]):not([type=color]){min-height:40px}button.icon{width:40px}input:not([type=checkbox]):not([type=color]),select,.f input,.f select{font-size:16px}
+input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:40px}
+.part .c{grid-template-columns:72px minmax(0,1fr) 80px}
+.modal{padding:8px}.modal .box{padding:var(--s4);max-height:94vh;max-height:94dvh}
+.toast{left:8px;right:8px;bottom:72px;transform:none;max-width:none;animation-name:fade}
 table.rev,table.rev tbody{display:block}table.rev thead{display:none}
 table.rev tr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--ln)}
 table.rev td{display:block;padding:0;border:0;white-space:normal;overflow-wrap:anywhere;min-width:0}
-table.rev td[data-l]{grid-column:1/-1}table.rev td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--mu);margin-bottom:3px}
+table.rev td[data-l]{grid-column:1/-1}table.rev td[data-l]::before{content:attr(data-l);display:block;font-size:12.5px;color:var(--mu);margin-bottom:3px}
 table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">Encaixe<b>/</b>Chapa</div>
-  <div class="projbar"><select id="proj" aria-label="Projeto"></select><button type="button" id="projNew">Novo projeto</button></div>
+<svg hidden aria-hidden="true"><defs>
+  <symbol id="i-mark" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 12h9V3M12 12l9 9"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-parts" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17" cy="6.5" r="3.5"/><path d="M6.5 14 10 20H3zM14 14h7v6h-7z"/></symbol>
+  <symbol id="i-models" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/></symbol>
+  <symbol id="i-nest" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h8V4M11 10v10M11 14h10"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-presets" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></symbol>
+</defs></svg>
+<div class="app" id="app">
+<nav class="rail" aria-label="Etapas do trabalho">
+  <div class="brand"><svg class="ic" aria-hidden="true"><use href="#i-mark"/></svg><h1 class="logo">Encaixe<b>/</b>Chapa</h1></div>
+  <div class="navgrp"><span class="navlbl">Início</span>
+    <button type="button" class="nav on" data-view="projetos" data-tip="Projetos" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><span>Projetos</span></button>
+  </div>
+  <div class="navgrp"><span class="navlbl">Preparação</span>
+    <button type="button" class="nav" data-view="import" data-tip="Importar"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg><span>Importar</span></button>
+    <button type="button" class="nav" data-view="pecas" data-tip="Modelos e peças"><svg class="ic" aria-hidden="true"><use href="#i-parts"/></svg><span>Modelos e peças</span></button>
+  </div>
+  <div class="navgrp"><span class="navlbl">Produção</span>
+    <button type="button" class="nav" data-view="encaixe" data-tip="Encaixar"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg><span>Encaixar</span></button>
+    <button type="button" class="nav" data-view="export" data-tip="Exportar"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg><span>Exportar</span></button>
+  </div>
+  <div class="navgrp"><span class="navlbl">Configurações</span>
+    <button type="button" class="nav" data-view="presets" data-tip="Presets"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><span>Presets</span></button>
+  </div>
+  <div class="navgrp railend">
+    <button type="button" class="nav" id="railToggle" data-tip="Recolher ou expandir o menu" aria-label="Recolher ou expandir o menu"><svg class="ic" aria-hidden="true"><use href="#i-rail"/></svg><span>Recolher menu</span></button>
+  </div>
+</nav>
+<header class="top">
+  <div class="crumb">Projetos<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></div>
+  <div class="projbar"><select id="proj" aria-label="Projeto"></select><button type="button" id="projNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
+  <span class="tag inf" id="linkTag" hidden></span>
   <div class="sp"></div>
-  <div class="kpi" id="kpi">sem peças</div><div class="saved" id="saved" role="status"></div>
+  <div class="saved" id="saved" role="status"></div><div class="kpi" id="kpi">sem peças</div>
+  <button class="pri" id="go" type="button" disabled>Encaixar</button>
 </header>
-<main>
-<aside class="l">
-  <details class="sec" open><summary><span class="step">1</span>Importar<span class="cnt" id="projInfo"></span></summary><div class="body">
+<main data-view="projetos">
+<aside class="panel" id="panel" aria-label="Painel de apoio">
+  <section class="sec" data-view="projetos"><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><h2>Projetos</h2></header><div class="body">
+    <label class="f">Buscar<input id="projFilter" type="search" autocomplete="off" placeholder="Código, produto, OP ou lote…"></label>
+    <div class="msg">Clique em um projeto para abri-lo. Marque “Juntar ao encaixe” para encaixar as peças de outro projeto junto com o projeto aberto.</div>
+    <div class="parts" id="projList"></div>
+    <div class="msg ok" id="linkInfo"></div>
+    <div class="btns"><button type="button" class="full" id="projNew2"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
+  </div></section>
+  <section class="sec" data-view="import" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg><h2>Importar</h2><span class="cnt" id="projInfo"></span></header><div class="body">
     <label class="drop" id="drop"><input id="file" type="file" accept=".dxf,.dwg,.svg" multiple hidden>
       <b>Solte vários DWG / DXF / SVG</b>Os arquivos vão para o projeto selecionado, após uma revisão</label>
     <div class="msg" id="imsg"></div>
-    <details><summary class="sub" style="cursor:pointer">Padrões de leitura</summary>
-      <div class="row" style="margin-top:8px">
+    <details><summary class="sub">Padrões de leitura</summary>
+      <div class="row subbody">
         <label class="f">Unidade do arquivo<select id="unit"><option value="auto">Automática</option><option value="1">mm</option><option value="10">cm</option><option value="1000">m</option><option value="25.4">polegada</option></select></label>
         <label class="f">Tolerância de ligação (mm)<input id="tol" type="number" value="0.05" step="0.01" min="0.001"></label>
         <label class="f">Material padrão<input id="defMat" value="Aço carbono" list="mats"></label>
         <label class="f">Espessura padrão (mm)<input id="defTh" type="number" value="3" step="0.1"></label>
       </div></details>
     <datalist id="mats"><option>Aço carbono</option><option>Inox 304</option><option>Alumínio</option><option>Galvanizado</option><option>MDF</option></datalist>
-  </div></details>
-  <details class="sec" open><summary><span class="step">2</span>Modelos e cores</summary><div class="body">
+  
+  </div></section>
+  <section class="sec" data-view="pecas" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-models"/></svg><h2>Modelos e cores</h2></header><div class="body">
     <div class="msg">A cor identifica o modelo da peça e não muda com a espessura nem com o arquivo. O modelo pode ser criado antes de importar. A cor é escolhida sozinha e nunca se repete entre modelos.</div>
-    <label class="f">Nome do modelo<input id="setName" placeholder="Bacio de poltrona, Lateral, Travessa"></label>
+    <label class="f">Nome do modelo<input id="setName" autocomplete="off" placeholder="Bacio de poltrona, Lateral, Travessa"></label>
     <div class="btns">
-      <button type="button" id="newSet" style="flex-basis:100%">Criar modelo</button>
+      <button type="button" id="newSet" class="full">Criar modelo</button>
       <button type="button" id="applyColor" disabled>Aplicar às marcadas</button>
       <button type="button" id="clearGroup" disabled>Tirar do modelo</button>
       <button type="button" id="pickAll">Marcar todas</button>
@@ -168,17 +279,17 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
     </div>
     <div class="msg" id="selInfo"></div>
     <div id="legend" class="parts"></div>
-    <details><summary class="sub" style="cursor:pointer">Regras de chapa entre modelos</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+    <details><summary class="sub">Regras de chapa entre modelos</summary><div class="subbody">
       <label class="f chk"><input type="checkbox" id="mix" checked> Permitir modelos diferentes na mesma chapa</label>
       <div class="msg" id="ruleHint"></div>
       <div class="row"><label class="f">Não misturar<select id="fa"></select></label><label class="f">com<select id="fb"></select></label></div>
       <button type="button" id="forbidAdd">Impedir mistura</button><div id="forbids" class="parts"></div></div></details>
-  </div></details>
-  <details class="sec" open><summary><span class="step">3</span>Peças<span class="cnt" id="pcount"></span></summary><div class="body"><div class="btns"><button type="button" class="danger" id="delPicked" disabled>Excluir marcadas</button></div><div class="parts" id="parts"></div></div></details>
-</aside>
-<div class="mid"><div class="tabs" id="tabs"></div><div class="stage" id="stage"><div class="empty">Crie ou escolha um projeto e importe os arquivos.<br>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div></div></div>
-<aside class="r">
-  <details class="sec" open><summary><span class="step">4</span>Encaixar</summary><div class="body">
+  
+  </div></section>
+  <section class="sec" data-view="pecas" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-parts"/></svg><h2>Peças</h2><span class="cnt" id="pcount"></span></header><div class="body">
+<div class="btns"><button type="button" class="danger" id="delPicked" disabled>Excluir marcadas</button></div><div class="parts" id="parts"></div>
+  </div></section>
+  <section class="sec" data-view="encaixe" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg><h2>Encaixar</h2></header><div class="body">
     <div id="groups" class="parts"></div>
     <div class="row">
       <label class="f">Espaço entre peças (mm)<input id="gap" type="number" value="4" step="0.5" min="0"></label>
@@ -188,21 +299,19 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
     <label class="f">Tempo de otimização<select id="secsPick"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option><option value="600">10 min</option><option value="1200">20 min</option><option value="1800">30 min</option><option value="">Outro…</option></select><input type="hidden" id="secs" value="30"></label>
     <label class="f" id="secsBox" hidden>Tempo em minutos<input id="secsMin" type="number" min="0.1" max="120" step="0.5" value="45"></label>
     <div class="msg">Mais tempo testa mais arranjos e costuma economizar chapa. Dá para parar antes e ficar com o melhor até ali.</div>
-    <details><summary class="sub" style="cursor:pointer">Opções avançadas</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+    <details><summary class="sub">Opções avançadas</summary><div class="subbody">
       <div class="row">
         <label class="f">Resolução (mm)<select id="res"><option value="1">1 · máximo</option><option value="2" selected>2 · preciso</option><option value="3">3 · equilibrado</option><option value="5">5 · rápido</option></select></label>
       </div>
       <label class="f chk"><input type="checkbox" id="srv" checked> Motor do servidor (Rust, melhor aproveitamento)</label>
       <label class="f chk"><input type="checkbox" id="fill" checked> Encaixar peças dentro dos furos das maiores</label></div></details>
-    <div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div>
-    <button class="pri" id="go" type="button" disabled>Encaixar</button>
-    <div class="msg" id="nmsg"></div>
     <div class="btns"><button type="button" id="nestSave" disabled>Salvar encaixe</button><button type="button" id="nestOpen" disabled>Abrir salvo</button></div>
     <div class="msg" id="nestInfo"></div>
-  </div></details>
-  <details class="sec" open><summary><span class="step">5</span>Exportar</summary><div class="body">
-    <label class="f">Trabalho<input id="job" maxlength="120" placeholder="Nome do trabalho"></label>
-    <label class="f">Padrão de nome dos arquivos<input id="namePat" maxlength="120"></label>
+  
+  </div></section>
+  <section class="sec" data-view="export" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg><h2>Exportar</h2></header><div class="body">
+    <label class="f">Trabalho<input id="job" autocomplete="off" maxlength="120" placeholder="Nome do trabalho"></label>
+    <label class="f">Padrão de nome dos arquivos<input id="namePat" autocomplete="off" maxlength="120"></label>
     <div class="msg">Campos: {projeto} {produto} {material} {espessura} {lote} {ordem} {seq}. A sequência continua por projeto, material e espessura.</div>
     <div class="row"><label class="f chk"><input type="checkbox" id="epsColors"> Cores dos modelos</label><label class="f chk"><input type="checkbox" id="epsFrame"> Contorno da chapa</label></div>
     <div class="btns"><button type="button" class="pri" id="xeps" disabled>EPS (esta aba)</button><button type="button" id="xepsall" disabled>EPS (todas)</button></div>
@@ -210,15 +319,27 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
     <div class="btns"><button type="button" id="xsvg" disabled>SVG</button><button type="button" id="xdxf" disabled>DXF</button><button type="button" id="xdwg" disabled>DWG</button><button type="button" id="xall" disabled>DXF (todas)</button></div>
     <div class="sub">Relatório</div>
     <div class="btns"><button type="button" id="pdfPrev" disabled>Prévia</button><button type="button" class="pri" id="pdfGo" disabled>Gerar PDF</button><button type="button" id="pdfDl" disabled>Baixar</button></div>
-  </div></details>
-  <details class="sec"><summary><span class="step">+</span>Presets de configuração</summary><div class="body">
-    <label class="f">Nome do preset<input id="presetName" maxlength="80" placeholder="Ex.: Aço 3 mm"></label>
+  
+  </div></section>
+  <section class="sec" data-view="presets" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><h2>Presets de configuração</h2></header><div class="body">
+    <label class="f">Nome do preset<input id="presetName" autocomplete="off" maxlength="80" placeholder="Ex.: Aço 3 mm"></label>
     <div class="preset-list" id="presetList"></div>
     <div class="btns"><button type="button" id="presetSave">Salvar</button><button type="button" id="presetApply" disabled>Aplicar</button><button type="button" id="presetUpdate" disabled>Atualizar</button><button type="button" id="presetDup" disabled>Duplicar</button><button type="button" id="presetDel" disabled>Excluir</button></div>
     <div class="msg">Os presets ficam gravados no servidor, na pasta data/.</div><div class="msg" id="pmsg"></div>
-  </div></details>
+  
+  </div></section>
 </aside>
+<div class="mid">
+  <div class="viewbar">
+    <button type="button" class="icon" id="panelToggle" aria-controls="panel" aria-expanded="true" aria-label="Mostrar ou esconder o painel" title="Mostrar ou esconder o painel"><svg class="ic" aria-hidden="true"><use href="#i-rail"/></svg></button>
+    <div class="tabs" id="tabs"></div>
+    <div class="zoom" role="group" aria-label="Zoom das chapas"><button type="button" class="icon" id="zOut" aria-label="Diminuir zoom" title="Diminuir zoom"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button><output id="zVal">Ajustado</output><button type="button" class="icon" id="zIn" aria-label="Aumentar zoom" title="Aumentar zoom"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button><button type="button" class="icon" id="zFit" aria-label="Ajustar à tela" title="Ajustar à tela"><svg class="ic" aria-hidden="true"><use href="#i-fit"/></svg></button></div>
+  </div>
+  <div class="runbar"><div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div><div class="msg" id="nmsg"></div></div>
+  <div class="stage" id="stage"><div class="empty"><b>Crie ou escolha um projeto e importe os arquivos.</b>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div></div>
+</div>
 </main>
+</div>
 <div class="modal" id="modal" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-hd"><h2 id="modalTitle">Prévia do relatório</h2><button type="button" id="modalX">Fechar</button></div>
@@ -235,9 +356,9 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
 <div class="modal" id="projModal" hidden>
   <div class="box sm" role="dialog" aria-modal="true" aria-labelledby="projTitle">
     <h2 id="projTitle">Novo projeto</h2>
-    <label class="f">Código do projeto *<input id="pjCode" maxlength="40" placeholder="Ex.: POLTRONA-A"></label>
-    <label class="f">Produto *<input id="pjProd" maxlength="80" placeholder="Ex.: Poltrona modelo A"></label>
-    <div class="row"><label class="f">Ordem de produção<input id="pjOrd" maxlength="40"></label><label class="f">Lote<input id="pjLot" maxlength="40"></label></div>
+    <label class="f">Código do projeto *<input id="pjCode" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Ex.: POLTRONA-A"></label>
+    <label class="f">Produto *<input id="pjProd" autocomplete="off" maxlength="80" placeholder="Ex.: Poltrona modelo A"></label>
+    <div class="row"><label class="f">Ordem de produção<input id="pjOrd" autocomplete="off" spellcheck="false" maxlength="40"></label><label class="f">Lote<input id="pjLot" autocomplete="off" spellcheck="false" maxlength="40"></label></div>
     <div class="msg w" id="pjErr"></div>
     <div class="btns"><button type="button" id="pjNo">Cancelar</button><button type="button" class="pri" id="pjOk">Criar projeto</button></div>
   </div>
@@ -322,7 +443,7 @@ function addParts(list,mat,th,merge,x={}){
 
 /* ---------- importação ---------- */
 /* ---------- persistência no servidor (data/*.json) ---------- */
-S.store={rev:0,projects:[],models:[],presets:[],settings:{naming:'{projeto}_{material}_{espessura}MM_{seq}'}};S.projectId=null;S.files=[];S.seq={};S.setQty={};S.savedNest=null;S.ready=false;
+S.store={rev:0,projects:[],models:[],presets:[],settings:{naming:'{projeto}_{material}_{espessura}MM_{seq}'}};S.projectId=null;S.files=[];S.seq={};S.setQty={};S.savedNest=null;S.links=[];S.ready=false;
 const sent={meta:'',models:'',proj:''};let saveT=null;
 function setSaved(t,k){const el=$('#saved');el.textContent=t;el.className='saved '+(k||'')}
 /* Rede caída vira mensagem clara em vez de "Failed to fetch". */
@@ -331,7 +452,7 @@ async function sfetch(url,opt){try{return await fetch(url,opt)}catch(e){setSaved
 async function api(path,body){const r=await sfetch(path,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});if(!r.ok){const e=Error(await r.text());e.status=r.status;throw e}return r.json()}
 function hist(kind,detail){api('/api/history',{kind,detail,project:S.projectId||''}).catch(()=>{})}
 const metaPatch=()=>({projects:S.store.projects,models:S.sets,presets:S.store.presets,settings:{...S.store.settings,forbid:S.forbid,mix:$('#mix').checked}});
-const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,nest:S.savedNest,parts:S.parts.map(({pick,...p})=>p)});
+const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,nest:S.savedNest,...(S.links.length?{links:S.links}:{}),parts:S.parts.filter(p=>!p.guest).map(({pick,guest,...p})=>p)});
 function autosave(){if(!S.ready)return;clearTimeout(saveT);saveT=setTimeout(()=>flush(),700);setSaved('gravando…')}
 async function flush(){
   if(!S.ready)return;clearTimeout(saveT);
@@ -350,15 +471,43 @@ const fileName=id=>{const f=S.files.find(x=>x.id===id);return f?f.name:''};
 function renderProj(){const L=S.store.projects;
   $('#proj').innerHTML=L.length?L.map(p=>`<option value="${esc(p.id)}" ${p.id===S.projectId?'selected':''}>${esc(p.code)} · ${esc(p.product)}</option>`).join(''):'<option value="">Nenhum projeto</option>';
   const p=curProj();$('#projInfo').textContent=p?[p.order&&'OP '+p.order,p.lot&&'lote '+p.lot].filter(Boolean).join(' · '):'';
-  $('#drop').classList.toggle('off',!p)}
+  $('#drop').classList.toggle('off',!p);renderProjList()}
 async function openProject(id){
   await flush();S.projectId=id||null;
   const d=id?await api('/api/project/'+id):{};
   S.parts=(d.parts||[]).map(p=>({...p,pick:false}));S.files=d.files||[];S.seq=d.seq||{};S.uid=d.uid||0;S.groups=d.groups||{};S.setQty=d.setQty||{};S.savedNest=d.nest||null;
+  S.links=(d.links||[]).filter(l=>l&&l.id!==id&&S.store.projects.some(p=>p.id===l.id));await loadGuests();
   S.res=null;S.snap=null;S.pdf=null;S.tab=null;sent.proj=JSON.stringify(projPayload());
   if(S.store.settings.last!==id){S.store.settings.last=id;autosave()}
   renderProj();render();if(S.savedNest&&openSavedNest(true))render()}
 $('#proj').onchange=e=>openProject(e.target.value).catch(x=>toast(x.message,'bad'));
+/* ---------- encaixe conjunto: peças de outros projetos entram só para o cálculo ---------- */
+/* As peças de um projeto juntado continuam gravadas no projeto de origem. Aqui são cópias só de leitura,
+   com o id deslocado (base × 1e6) para não colidir com as do projeto aberto; o projeto aberto guarda apenas a lista `links`. */
+const GUEST=1e6;
+const projCode=id=>{const p=S.store.projects.find(x=>x.id===id);return p?p.code:''};
+async function loadGuests(){
+  S.parts=S.parts.filter(p=>!p.guest);
+  for(const l of S.links){
+    try{const d=await api('/api/project/'+l.id);for(const p of d.parts||[])S.parts.push({...p,id:l.base*GUEST+p.id,guest:l.id,pick:false})}
+    catch(e){toast('Não foi possível ler o projeto '+projCode(l.id)+': '+e.message,'bad')}}}
+async function linkProject(id,on){
+  if(!S.projectId||id===S.projectId)return;
+  if(on){if(!S.links.some(l=>l.id===id)){let b=1;while(S.links.some(l=>l.base===b))b++;S.links.push({id,base:b})}}
+  else S.links=S.links.filter(l=>l.id!==id);
+  await loadGuests();S.res=null;S.snap=null;S.pdf=null;renderProj();render();
+  status(on?'Peças de '+projCode(id)+' juntadas ao encaixe. Encaixe de novo.':'Peças de '+projCode(id)+' retiradas do encaixe.',false)}
+function renderProjList(){
+  const q=($('#projFilter').value||'').trim().toLowerCase(),L=S.store.projects.filter(p=>!q||[p.code,p.product,p.order,p.lot].join(' ').toLowerCase().includes(q));
+  $('#projList').innerHTML=L.map(p=>{const cur=p.id===S.projectId,lk=S.links.some(l=>l.id===p.id);
+    return `<div class="proj ${cur?'on':''} ${lk?'lk':''}"><button type="button" class="projopen" data-open="${esc(p.id)}" ${cur?'aria-current="true"':''}><b>${esc(p.code)}</b><span>${esc(p.product)}</span><span>${esc([p.order&&'OP '+p.order,p.lot&&'lote '+p.lot].filter(Boolean).join(' · '))}</span></button>${cur?'<span class="tag on">aberto</span>':`<label class="f chk"><input type="checkbox" data-link="${esc(p.id)}" ${lk?'checked':''} ${S.projectId?'':'disabled'}> Juntar ao encaixe</label>`}</div>`}).join('')||`<div class="msg">${S.store.projects.length?'Nenhum projeto com esse texto.':'Nenhum projeto ainda. Crie o primeiro.'}</div>`;
+  const n=S.links.length;
+  $('#linkInfo').textContent=n?'Encaixe conjunto: '+[projCode(S.projectId),...S.links.map(l=>projCode(l.id))].join(' + ')+'. Chapas, exportação e relatório ficam no projeto aberto.':'';
+  $('#linkTag').hidden=!n;$('#linkTag').textContent=n?'+ '+S.links.map(l=>projCode(l.id)).join(' + '):''}
+$('#projList').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b&&b.dataset.open!==S.projectId)openProject(b.dataset.open).catch(x=>toast(x.message,'bad'))});
+$('#projList').addEventListener('change',e=>{const t=e.target;if(t.dataset.link)linkProject(t.dataset.link,t.checked).catch(x=>toast(x.message,'bad'))});
+$('#projFilter').addEventListener('input',renderProjList);
+$('#projNew2').onclick=openProjModal;
 function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';$('#projModal').hidden=false;$('#pjCode').focus()}
 $('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>{$('#projModal').hidden=true};
 $('#pjOk').onclick=async()=>{
@@ -771,14 +920,14 @@ function nextColor(skip){
   for(;;){const c='#'+Math.floor(Math.random()*0x1000000).toString(16).padStart(6,'0');if(!used.includes(c))return c}
 }
 function uniqueColors(){const seen=new Set();let n=0;for(const x of S.sets){if(seen.has(String(x.color).toLowerCase())){x.color=nextColor(x);n++}seen.add(String(x.color).toLowerCase())}return n}
-function picked(){return S.parts.filter(p=>p.pick)}
+function picked(){return S.parts.filter(p=>p.pick&&!p.guest)}
 /* Quantidade de modelos (por projeto): a quantidade de cada peça do modelo é a de um modelo × este número. */
 const setN=id=>Math.max(1,Math.round(+S.setQty[id])||1);
 function moveToSet(p,gid){gid=gid||'';if(p.groupId===gid)return;const a=p.groupId?setN(p.groupId):1,b=gid?setN(gid):1;p.qty=Math.max(1,Math.round(p.qty/a*b));p.groupId=gid}
 function setCount(id,v){
   const s=S.sets.find(x=>x.id===id);if(!s)return;
   const n=setN(id),m=Math.max(1,Math.round(+v)||1);if(m===n){render();return}
-  const parts=S.parts.filter(p=>p.groupId===id),odd=parts.filter(p=>p.qty%n).length;
+  const parts=S.parts.filter(p=>p.groupId===id&&!p.guest),odd=parts.filter(p=>p.qty%n).length;
   for(const p of parts)p.qty=Math.max(1,Math.round(p.qty/n*m));
   if(m>1)S.setQty[id]=m;else delete S.setQty[id];
   S.res=null;S.snap=null;S.pdf=null;render();
@@ -809,12 +958,12 @@ $('#clearGroup').onclick=()=>{
   if(rulesActive()){S.res=null;S.snap=null;S.pdf=null}
   render();toast('Peças fora do conjunto.','ok');
 };
-$('#pickAll').onclick=()=>{S.parts.forEach(p=>{p.pick=true});render()};
+$('#pickAll').onclick=()=>{S.parts.forEach(p=>{p.pick=!p.guest});render()};
 $('#pickNone').onclick=()=>{S.parts.forEach(p=>{p.pick=false});render()};
 $('#mix').addEventListener('change',()=>{S.res=null;S.snap=null;S.pdf=null;render();status($('#mix').checked?'Cores diferentes podem compartilhar a chapa. Encaixe de novo.':'Cada conjunto vai para chapas separadas. Encaixe de novo.',false)});
 /* Exclui peças do projeto aberto; arquivo de origem que ficar sem peça sai junto, para poder ser reimportado. */
 async function removeParts(list,what){
-  if(!list.length)return false;
+  list=list.filter(p=>!p.guest);if(!list.length)return false;
   const un=list.reduce((a,p)=>a+p.qty,0);
   if(!await ask('Excluir '+what+' deste projeto ('+list.length+' peça(s), '+un+' un)? Essa ação não pode ser desfeita.','Excluir',true))return false;
   const ids=new Set(list.map(p=>p.id)),at=S.parts.map((p,i)=>ids.has(p.id)?[i,p]:null).filter(Boolean),pid=S.projectId;
@@ -899,15 +1048,15 @@ function render(){renderCore();autosave()}
 function renderCore(){
   $('#go').disabled=!S.parts.some(p=>p.on);
   $('#pcount').textContent=S.parts.length?`${S.parts.reduce((s,p)=>s+(p.on?p.qty:0),0)} un · ${S.parts.length} únicas`:'';
-  $('#parts').innerHTML=S.parts.map((p,i)=>{const col=partColor(p);return `<div class="part ${p.on?'':'off'} ${p.pick?'pick':''} ${p.groupId?'':'pend'}" data-i="${i}">
-   <input type="checkbox" data-f="on" ${p.on?'checked':''} title="Usar no encaixe" aria-label="Usar ${esc(p.name)} no encaixe">
+  $('#parts').innerHTML=S.parts.map((p,i)=>{const col=partColor(p),ro=p.guest?' disabled':'';return `<div class="part ${p.on?'':'off'} ${p.pick?'pick':''} ${p.groupId?'':'pend'} ${p.guest?'guest':''}" data-i="${i}">
+   <input type="checkbox" data-f="on" ${p.on?'checked':''}${ro} title="Usar no encaixe" aria-label="Usar ${esc(p.name)} no encaixe">
    <svg viewBox="${-2} ${-p.h-2} ${p.w+4} ${p.h+4}"><path d="${path(p.rings)}" fill="${col}" fill-opacity=".85" fill-rule="evenodd"/></svg>
-   <div><div class="n"><i class="sw" style="background:${col}"></i>${esc(p.name)}${p.groupId?'':'<span class="tag pend">sem modelo</span>'}${p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':''}</div><div class="m" title="${esc(fileName(p.fileId))}">${p.w.toFixed(0)}×${p.h.toFixed(0)} mm${p.holes?` · ${p.holes} furo${p.holes>1?'s':''}`:''}${p.groupId?' · '+esc(setNameOf(p.groupId)):''}${p.fileId?' · '+esc(fileName(p.fileId)):''}</div></div>
-   <div class="c"><input type="number" min="1" value="${p.qty}" data-f="qty" title="Quantidade" aria-label="Quantidade de ${esc(p.name)}">
-    <input value="${esc(p.mat)}" data-f="mat" list="mats" title="Material" aria-label="Material de ${esc(p.name)}"><input type="number" step=".1" value="${p.th}" data-f="th" title="Espessura (mm)" aria-label="Espessura de ${esc(p.name)}"></div>
-   <div class="c2"><label><input type="checkbox" data-f="pick" ${p.pick?'checked':''}>marcar</label>
-    <select data-f="groupId" aria-label="Conjunto de ${esc(p.name)}"><option value="">Sem modelo (pendente)</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${p.groupId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
-   <div class="c2">Giro <select data-f="rot" aria-label="Giro de ${esc(p.name)}">${[['auto','Padrão (global)'],['free','Livre 360°'],['90','90°'],['180','180° (veio)'],['0','Fixo (veio)']].map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select><label><input type="checkbox" data-f="mirror" ${p.mirror?'checked':''}>espelhar</label><button type="button" data-del-part aria-label="Excluir ${esc(p.name)}">Excluir</button></div></div>`}).join('');
+   <div><div class="n"><i class="sw" style="background:${col}"></i>${esc(p.name)}${p.guest?'<span class="tag inf" title="Peça de outro projeto, juntada só para o encaixe">'+esc(projCode(p.guest))+'</span>':''}${p.groupId?'':'<span class="tag pend">sem modelo</span>'}${p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':''}</div><div class="m" title="${esc(fileName(p.fileId))}">${p.w.toFixed(0)}×${p.h.toFixed(0)} mm${p.holes?` · ${p.holes} furo${p.holes>1?'s':''}`:''}${p.groupId?' · '+esc(setNameOf(p.groupId)):''}${p.fileId?' · '+esc(fileName(p.fileId)):''}</div></div>
+   <div class="c"><input type="number" min="1" value="${p.qty}" data-f="qty"${ro} title="Quantidade" aria-label="Quantidade de ${esc(p.name)}">
+    <input value="${esc(p.mat)}" data-f="mat"${ro} list="mats" title="Material" aria-label="Material de ${esc(p.name)}"><input type="number" step=".1" value="${p.th}" data-f="th"${ro} title="Espessura (mm)" aria-label="Espessura de ${esc(p.name)}"></div>
+   <div class="c2"><label><input type="checkbox" data-f="pick" ${p.pick?'checked':''}${ro}>marcar</label>
+    <select data-f="groupId"${ro} aria-label="Conjunto de ${esc(p.name)}"><option value="">Sem modelo (pendente)</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${p.groupId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
+   <div class="c2">Giro <select data-f="rot"${ro} aria-label="Giro de ${esc(p.name)}">${[['auto','Padrão (global)'],['free','Livre 360°'],['90','90°'],['180','180° (veio)'],['0','Fixo (veio)']].map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select><label><input type="checkbox" data-f="mirror" ${p.mirror?'checked':''}${ro}>espelhar</label><button type="button" data-del-part${ro} aria-label="Excluir ${esc(p.name)}">Excluir</button></div></div>`}).join('');
   const G=groupsOf();
   Object.keys(G).forEach(k=>{if(!S.groups[k]){const mem=S.sheetMemory&&S.sheetMemory[k];if(mem&&+mem.w>0&&+mem.h>0)S.groups[k]={w:+mem.w,h:+mem.h};else{const t=+k.split('· ')[1].replace(' mm','');const mdf=/mdf|mdp|compens/i.test(k);S.groups[k]=mdf?{w:2750,h:1840}:{w:3000,h:t>=6?1500:1250}}}});
   $('#groups').innerHTML=Object.keys(G).map(k=>{const g=S.groups[k],q=G[k].reduce((s,p)=>s+p.qty,0),a=G[k].reduce((s,p)=>s+p.A*p.qty,0)/1e6;
@@ -920,7 +1069,7 @@ function renderCore(){
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
   const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
   $('#nestInfo').className='msg'+(old?' w':'');$('#nestInfo').textContent=sv?'Encaixe salvo em '+whenLabel(sv.savedAt)+' · '+sv.sheets+' chapa(s).'+(old?' As peças ou chapas mudaram desde então: ele não pode mais ser aberto.':''):'Nenhum encaixe salvo neste projeto.';
-  if(!R){$('#kpi').textContent=S.parts.length?'pronto para encaixar':'sem peças';if(!S.parts.length)$('#stage').innerHTML='<div class="empty">Importe um arquivo para começar.<br>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div>';else $('#stage').innerHTML='<div class="empty">Ajuste material, espessura e quantidade e clique em <b>&nbsp;Encaixar</b>.</div>';return}
+  if(!R){$('#kpi').textContent=S.parts.length?'pronto para encaixar':'sem peças';if(!S.parts.length)$('#stage').innerHTML='<div class="empty"><b>Importe um arquivo para começar.</b>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div>';else $('#stage').innerHTML='<div class="empty"><b>Peças prontas para encaixar.</b>Ajuste material, espessura e quantidade e clique em Encaixar.</div>';return}
   const gr=R[S.tab],g=S.groups[S.tab];let tot=0,ar=0,ns=0;Object.keys(R).forEach(k=>{ns+=R[k].sheets.length;const gg=S.groups[k];ar+=R[k].sheets.length*gg.w*gg.h;tot+=used(R[k])});
   $('#kpi').innerHTML=ns?`<b>${ns}</b> chapa${ns>1?'s':''} · aproveitamento <b>${(tot/ar*100).toFixed(1)}%</b>`:`<b>0</b> chapas · nada encaixado`;
   const nJunto=(gr.failWhy||[]).filter(w=>w==='junto').length,nSize=(gr.fail||[]).length-nJunto;
@@ -929,7 +1078,7 @@ function renderCore(){
   if(nJunto) warn+=(warn?' ':'')+`${nJunto} peça(s) não couberam na mesma chapa do conjunto.`;
   $('#stage').innerHTML=(warn?`<div class="msg w" style="margin-bottom:8px">${esc(warn)}</div>`:'')+legendBar()+gr.sheets.map((sh,si)=>{
     const u=sh.placed.reduce((s,p)=>s+p.it.A,0)/(g.w*g.h)*100;
-    return`<div class="sheetbox"><div class="hd"><b>Chapa ${si+1}</b><span>${g.w}×${g.h} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${gr.ext[si]} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div>${sheetSVG(sh,g)}</div>`}).join('')}
+    return`<div class="sheetbox"><div class="hd"><b>Chapa ${si+1}</b><span>${g.w}×${g.h} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${gr.ext[si]} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div><div class="cv">${sheetSVG(sh,g)}</div></div>`}).join('')}
 function sheetSVG(sh,g,plain){
   const body=sh.placed.map(p=>{
     const col=partColor(p.it);
@@ -939,7 +1088,7 @@ function sheetSVG(sh,g,plain){
 }
 document.addEventListener('input',e=>{const t=e.target,pe=t.closest('.part'),ge=t.closest('.grp');
   if(t.dataset.setF==='name'){const s=S.sets.find(x=>x.id===t.dataset.set);if(s)s.name=t.value;return}
-  if(pe&&t.dataset.f){const p=S.parts[+pe.dataset.i],f=t.dataset.f;
+  if(pe&&t.dataset.f){const p=S.parts[+pe.dataset.i],f=t.dataset.f;if(p.guest)return;
     if(f==='pick'){p.pick=t.checked;pe.classList.toggle('pick',p.pick);updateColorButtons();return}
     if(f==='groupId') return;
     p[f]=t.tagName==='SELECT'?t.value:t.type==='checkbox'?t.checked:t.type==='number'?(+t.value||(f==='th'?1:1)):t.value;if(f==='th')p.thSrc='manual';if(f==='mat')p.matSrc='manual';S.res=null;S.snap=null;S.pdf=null}
@@ -955,7 +1104,7 @@ document.addEventListener('change',e=>{
     if(f==='isolate'||f==='together'){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Regra alterada. Encaixe de novo para valer no cálculo.'}
     render();return}
   const pe=t.closest('.part');
-  if(pe&&t.dataset.f==='groupId'){const p=S.parts[+pe.dataset.i];moveToSet(p,t.value);if(rulesActive()){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Conjunto alterado. Encaixe de novo para a regra valer.'}render();return}
+  if(pe&&t.dataset.f==='groupId'){const p=S.parts[+pe.dataset.i];if(p.guest)return;moveToSet(p,t.value);if(rulesActive()){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Conjunto alterado. Encaixe de novo para a regra valer.'}render();return}
   const pr=t.closest('.grp');
   if(pr&&t.hasAttribute('data-preset')&&t.value){const[w,hh]=t.value.split('x').map(Number);Object.assign(S.groups[pr.dataset.k],{w,h:hh});S.sheetMemory[pr.dataset.k]={w,h:hh};S.res=null;S.snap=null;S.pdf=null;render();return}
   if(pe&&['mat','th','on','qty'].includes(t.dataset.f))render()});
@@ -1372,6 +1521,25 @@ $('#namePat').addEventListener('change',()=>{S.store.settings.naming=$('#namePat
     setSaved('dados no servidor','ok');
   }catch(e){setSaved('servidor indisponível: nada será gravado','bad');renderProj()}
 })();
+
+/* ---------- interface: navegação, painel e zoom (só aparência; não toca em dados nem no encaixe) ---------- */
+const mainEl=$('main'),appEl=$('#app');
+function showView(v,toggle){
+  const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
+  mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
+  const open=!mainEl.classList.contains('nopanel');
+  document.querySelectorAll('.sec[data-view]').forEach(el=>{el.hidden=el.dataset.view!==v});
+  document.querySelectorAll('.nav[data-view]').forEach(b=>{const on=open&&b.dataset.view===v;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  $('#panelToggle').setAttribute('aria-expanded',open)}
+$('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(b)showView(b.dataset.view,true)});
+$('#panelToggle').onclick=()=>showView(mainEl.dataset.view,true);
+$('#railToggle').onclick=()=>{const wide=$('.rail').offsetWidth>100;appEl.classList.toggle('rail-min',wide);appEl.classList.toggle('rail-max',!wide);
+  $('#railToggle').querySelector('span').textContent=wide?'Expandir menu':'Recolher menu'};
+const ZOOMS=[1,1.5,2,3,4,6];let zi=0;
+function setZoom(i){zi=Math.max(0,Math.min(ZOOMS.length-1,i));const z=ZOOMS[zi],st=$('#stage');st.style.setProperty('--z',z);st.classList.toggle('zoomed',zi>0);
+  $('#zVal').textContent=zi?Math.round(z*100)+'%':'Ajustado';$('#zOut').disabled=$('#zFit').disabled=!zi;$('#zIn').disabled=zi===ZOOMS.length-1}
+$('#zIn').onclick=()=>setZoom(zi+1);$('#zOut').onclick=()=>setZoom(zi-1);$('#zFit').onclick=()=>setZoom(0);
+setZoom(0);
 </script>
 </body>
 </html>
