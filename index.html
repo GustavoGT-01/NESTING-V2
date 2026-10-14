@@ -46,9 +46,9 @@ body{background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans);font-varian
 .saved{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu);white-space:nowrap}
 .saved:not(:empty)::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.saved.ok{color:var(--ok)}.saved.bad{color:var(--bad)}
 #go{padding:8px 22px;font-size:14px}
-main{display:grid;grid-template-columns:var(--panel) minmax(0,1fr);min-height:0}main.nopanel{grid-template-columns:minmax(0,1fr)}
+main{display:grid;grid-template-columns:minmax(0,1fr) var(--panel);min-height:0}main.nopanel{grid-template-columns:minmax(0,1fr)}
 .panel,.mid{min-height:0;overflow:auto}.mid{min-width:0;scroll-margin-top:64px;display:flex;flex-direction:column}
-.panel{background:var(--bg2);border-right:1px solid var(--ln);padding:var(--s4);display:flex;flex-direction:column;gap:var(--s5)}main.nopanel .panel{display:none}
+.panel{order:2;background:var(--bg2);border-left:1px solid var(--ln);box-shadow:-12px 0 24px -16px rgba(0,0,0,.5);padding:var(--s4);display:flex;flex-direction:column;gap:var(--s5)}main.nopanel .panel{display:none}
 .sec{display:flex;flex-direction:column;gap:var(--s3);min-width:0;flex:0 0 auto;animation:in .22s var(--ease)}
 .sh{display:flex;align-items:center;gap:var(--s2);min-height:28px}.sh .ic{color:var(--ac)}
 .sh h2{font-size:16px;font-weight:650;letter-spacing:-.01em}
@@ -121,7 +121,7 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
 .tab{background:transparent;color:var(--mu);font-weight:600;border-radius:99px;padding:6px 14px}
 .tab.on,.tab.on:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 14%,transparent);border-color:color-mix(in srgb,var(--ac) 55%,transparent);color:var(--ac)}
-.zoom{display:flex;align-items:center;gap:4px;margin-left:auto}.zoom output{min-width:66px;text-align:center;font-size:13px;color:var(--mu)}
+.zoom{display:flex;align-items:center;gap:4px;margin-left:auto}#panelToggle{order:3}#panelToggle .ic{transform:scaleX(-1)}.zoom output{min-width:66px;text-align:center;font-size:13px;color:var(--mu)}
 .runbar{display:flex;flex-direction:column;gap:var(--s2);padding:10px var(--s4);background:var(--bg2);border-bottom:1px solid var(--ln)}
 .runbar:not(:has(.prog:not([hidden]))):has(#nmsg:empty){display:none}
 .prog{display:grid;grid-template-columns:auto minmax(80px,1fr) auto;align-items:center;gap:var(--s2) var(--s3)}.prog[hidden]{display:none}
@@ -148,12 +148,23 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .modal .box.ask{width:min(480px,100%)}.modal .box.sm{width:min(460px,100%)}
 .modal-hd{display:flex;justify-content:space-between;align-items:center;gap:8px}.modal h2{font-size:18px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
 #askText{white-space:pre-line;font-size:15px;line-height:1.55}
-.tblwrap{overflow:auto;border:1px solid var(--ln);border-radius:var(--r);background:var(--bg2)}
-table.rev{width:100%;border-collapse:collapse;font-size:13px}
-table.rev th,table.rev td{padding:9px 12px;border-bottom:1px solid var(--ln);text-align:left;vertical-align:middle;white-space:nowrap}
-table.rev tr:last-child td{border-bottom:0}table.rev tbody tr:hover{background:var(--sf)}
-table.rev th{font-size:12.5px;font-weight:600;color:var(--mu);background:var(--sf2);position:sticky;top:0;z-index:1}
-table.rev td input,table.rev td select{width:100%;min-width:90px}table.rev td select{min-width:150px}table.rev td input+.tag{display:table;margin:4px 0 0}table.rev td.wide{white-space:normal;min-width:120px}
+.implist{display:flex;flex-direction:column;gap:var(--s2);max-height:min(60vh,560px);overflow:auto;padding-right:2px}
+.imp{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:12px;transition:border-color .15s,opacity .15s}
+.imp:hover{border-color:var(--ln2)}.imp[data-off]{opacity:.55}
+.imp-hd{display:flex;align-items:flex-start;gap:12px}.imp-hd input[type=checkbox]{margin-top:3px}
+.imp-name{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.imp-name b{font-size:14.5px;overflow-wrap:anywhere}
+.imp-meta{font-size:12.5px;color:var(--mu)}
+.imp-st{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:55%}.imp-st .tag{margin:0}
+.imp-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.imp-lb{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.imp-lb .tag{margin:0}
+.imp-bulk{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln));background:color-mix(in srgb,var(--ac) 6%,var(--sf));position:sticky;top:0;z-index:2}
+.imp-bulk .imp-hd{align-items:center}.imp-bulk button{white-space:nowrap}
+.xcard{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px}
+.xcard-hd{display:flex;align-items:baseline;justify-content:space-between;gap:4px 8px;flex-wrap:wrap}.xcard-hd b{font-size:14px}.xcard-hd span{font-size:12px;color:var(--mu)}
+.x-prev{font-size:12.5px;color:var(--mu);overflow-wrap:anywhere}.x-prev b{color:var(--tx);font-weight:600}
+.fmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fmt-grid button{flex-direction:column;align-items:flex-start;gap:1px;padding:10px 12px;text-align:left}
+.fmt-grid b{font-size:14px}.fmt-grid span{font-size:12px;color:var(--mu);font-weight:400}
+.tag.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
 .paper{background:#fff;color:#16181b;padding:20px;border-radius:4px}.paper h2{font-size:16px;letter-spacing:0;margin:18px 0 8px;color:#16181b}.paper h2:first-child{margin-top:0}
 .paper p{margin:0 0 6px;font-size:13px}.paper table{width:100%;border-collapse:collapse;font-size:12.5px;margin:0 0 8px}
 .paper th,.paper td{border:1px solid #d4d8dc;padding:5px 7px;vertical-align:top;text-align:left}
@@ -176,12 +187,12 @@ table.rev td input,table.rev td select{width:100%;min-width:90px}table.rev td se
 html,body{height:auto}body{overflow:visible;padding-bottom:64px}
 .app{display:block}
 .app .rail,.app:not(.rail-max) .rail{position:fixed;inset:auto 0 0 0;width:auto;height:64px;flex-direction:row;align-items:stretch;gap:0;padding:6px;border-right:0;border-top:1px solid var(--ln);z-index:30}
-.brand,.railend,.app .navlbl,.app:not(.rail-max) .navlbl{display:none}.navgrp{display:contents}
+.brand,.navgrp.railend,.app .navlbl,.app:not(.rail-max) .navlbl{display:none}.navgrp{display:contents}
 .app .nav,.app:not(.rail-max) .nav{flex:1 1 0;min-width:0;height:auto;flex-direction:column;justify-content:center;gap:3px;padding:0 2px;font-size:11.5px}
 .app .nav span,.app:not(.rail-max) .nav span{display:block;max-width:100%}.nav::before{display:none}
 .app .nav[data-tip]::after{content:none!important}
 .top{padding:var(--s2) var(--s3)}.top .sp{display:none}.projbar{flex:1 1 220px}.projbar select{width:auto;flex:1}.kpi{white-space:normal;border-radius:var(--r)}#go{flex:1 1 100%}
-main,main.nopanel{display:block}.panel{border-right:0;border-bottom:1px solid var(--ln);padding:var(--s3)}.panel,.mid{overflow:visible}
+main,main.nopanel{display:block}.panel{border-left:0;box-shadow:none;border-bottom:1px solid var(--ln);padding:var(--s3)}.panel,.mid{overflow:visible}
 .viewbar{padding:8px var(--s3)}.stage{padding:var(--s3)}.runbar{padding:8px var(--s3)}
 .prog{grid-template-columns:auto minmax(0,1fr)}.prog .msg{grid-column:1/-1}.prog button{grid-row:auto;grid-column:1/-1}
 .empty{min-height:160px;padding:20px}.empty b{font-size:19px}.bar{width:80px}
@@ -191,11 +202,7 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
 .part .c{grid-template-columns:72px minmax(0,1fr) 80px}
 .modal{padding:8px}.modal .box{padding:var(--s4);max-height:94vh;max-height:94dvh}
 .toast{left:8px;right:8px;bottom:72px;transform:none;max-width:none;animation-name:fade}
-table.rev,table.rev tbody{display:block}table.rev thead{display:none}
-table.rev tr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;border-bottom:1px solid var(--ln)}
-table.rev td{display:block;padding:0;border:0;white-space:normal;overflow-wrap:anywhere;min-width:0}
-table.rev td[data-l]{grid-column:1/-1}table.rev td[data-l]::before{content:attr(data-l);display:block;font-size:12.5px;color:var(--mu);margin-bottom:3px}
-table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
+.imp-fields{grid-template-columns:1fr}.imp-hd{flex-wrap:wrap}.imp-st{max-width:none;justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -261,9 +268,10 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
       <div class="row subbody">
         <label class="f">Unidade do arquivo<select id="unit"><option value="auto">Automática</option><option value="1">mm</option><option value="10">cm</option><option value="1000">m</option><option value="25.4">polegada</option></select></label>
         <label class="f">Tolerância de ligação (mm)<input id="tol" type="number" value="0.05" step="0.01" min="0.001"></label>
-        <label class="f">Material padrão<input id="defMat" value="Aço carbono" list="mats"></label>
-        <label class="f">Espessura padrão (mm)<input id="defTh" type="number" value="3" step="0.1"></label>
-      </div></details>
+        <label class="f">Material padrão<select id="defMat"></select></label>
+        <label class="f">Espessura padrão (mm)<span id="defThBox" style="display:contents"><input id="defTh" type="number" value="3" step="0.1"></span></label>
+      </div>
+      <div class="msg" id="defMatHint"></div></details>
     <datalist id="mats"><option>Aço carbono</option><option>Inox 304</option><option>Alumínio</option><option>Galvanizado</option><option>MDF</option></datalist>
   
   </div></section>
@@ -310,19 +318,38 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
   
   </div></section>
   <section class="sec" data-view="export" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg><h2>Exportar</h2></header><div class="body">
-    <label class="f">Trabalho<input id="job" autocomplete="off" maxlength="120" placeholder="Nome do trabalho"></label>
-    <label class="f">Padrão de nome dos arquivos<input id="namePat" autocomplete="off" maxlength="120"></label>
-    <div class="msg">Campos: {projeto} {produto} {material} {espessura} {lote} {ordem} {seq}. A sequência continua por projeto, material e espessura.</div>
-    <div class="row"><label class="f chk"><input type="checkbox" id="epsColors"> Cores dos modelos</label><label class="f chk"><input type="checkbox" id="epsFrame"> Contorno da chapa</label></div>
-    <div class="btns"><button type="button" class="pri" id="xeps" disabled>EPS (esta aba)</button><button type="button" id="xepsall" disabled>EPS (todas)</button></div>
-    <div class="sub">Outros formatos</div>
-    <div class="btns"><button type="button" id="xsvg" disabled>SVG</button><button type="button" id="xdxf" disabled>DXF</button><button type="button" id="xdwg" disabled>DWG</button><button type="button" id="xall" disabled>DXF (todas)</button></div>
-    <div class="sub">Relatório</div>
-    <div class="btns"><button type="button" id="pdfPrev" disabled>Prévia</button><button type="button" class="pri" id="pdfGo" disabled>Gerar PDF</button><button type="button" id="pdfDl" disabled>Baixar</button></div>
+    <div class="msg w" id="xLock">Encaixe as peças para liberar a exportação.</div>
+    <div class="xcard">
+      <label class="f">Trabalho<input id="job" autocomplete="off" maxlength="120" placeholder="Nome do trabalho"></label>
+      <input type="hidden" id="namePat" value="{projeto}_{material}_{espessura}MM_{seq}">
+      <div class="x-prev">Nome dos arquivos (padrão): <b id="patPrev"></b></div>
+      <div class="msg">Sempre projeto_material_espessuraMM_sequência. A sequência continua por projeto, material e espessura.</div>
+    </div>
+    <div class="xcard">
+      <div class="xcard-hd"><b>Arquivos de corte · EPS</b><span>conferidos contra o desenho</span></div>
+      <div class="row"><label class="f chk"><input type="checkbox" id="epsColors"> Cores dos modelos</label><label class="f chk"><input type="checkbox" id="epsFrame"> Contorno da chapa</label></div>
+      <div class="btns"><button type="button" class="pri" id="xeps" disabled>EPS desta aba</button><button type="button" id="xepsall" disabled>EPS de todas</button></div>
+    </div>
+    <div class="xcard">
+      <div class="xcard-hd"><b>Outros formatos</b></div>
+      <div class="fmt-grid">
+        <button type="button" id="xsvg" disabled><b>SVG</b><span>esta aba · visualizar</span></button>
+        <button type="button" id="xdxf" disabled><b>DXF</b><span>esta aba · CAD</span></button>
+        <button type="button" id="xdwg" disabled><b>DWG</b><span>esta aba · via ODA</span></button>
+        <button type="button" id="xall" disabled><b>DXF</b><span>todas as abas</span></button>
+      </div>
+    </div>
+    <div class="xcard">
+      <div class="xcard-hd"><b>Relatório</b><span>PDF com chapas e lista de peças</span></div>
+      <div class="btns"><button type="button" id="pdfPrev" disabled>Prévia</button><button type="button" class="pri" id="pdfGo" disabled>Gerar PDF</button><button type="button" id="pdfDl" disabled>Baixar</button></div>
+    </div>
   
   </div></section>
-  <section class="sec" data-view="presets" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><h2>Presets de configuração</h2></header><div class="body">
-    <label class="f">Nome do preset<input id="presetName" autocomplete="off" maxlength="80" placeholder="Ex.: Aço 3 mm"></label>
+  <section class="sec" data-view="presets" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><h2>Presets de encaixe</h2></header><div class="body">
+    <label class="f">Nome do preset<input id="presetName" autocomplete="off" maxlength="80" placeholder="Ex.: MDF 15 mm"></label>
+    <div class="row"><label class="f">Material<input id="presetMat" list="mats" autocomplete="off" maxlength="60" placeholder="Ex.: MDF"></label><label class="f">Espessura (mm)<input id="presetTh" type="number" step="0.1" min="0.1"></label></div>
+    <div class="row"><label class="f">Comprimento da chapa (mm)<input id="presetW" type="number" step="1" min="1"></label><label class="f">Largura da chapa (mm)<input id="presetH" type="number" step="1" min="1"></label></div>
+    <div class="msg">O preset guarda a chapa deste material e espessura e os parâmetros de Encaixar: espaço entre peças, margem, rotação, tempo, resolução e encaixe nos furos. Modelos e cores não entram.</div>
     <div class="preset-list" id="presetList"></div>
     <div class="btns"><button type="button" id="presetSave">Salvar</button><button type="button" id="presetApply" disabled>Aplicar</button><button type="button" id="presetUpdate" disabled>Atualizar</button><button type="button" id="presetDup" disabled>Duplicar</button><button type="button" id="presetDel" disabled>Excluir</button></div>
     <div class="msg">Os presets ficam gravados no servidor, na pasta data/.</div><div class="msg" id="pmsg"></div>
@@ -367,7 +394,7 @@ table.rev td .tag{margin:4px 4px 0 0}table.rev td.wide{min-width:0}}
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="impTitle">
     <div class="modal-hd"><h2 id="impTitle">Revisar importação</h2></div>
     <div class="msg" id="impHead"></div>
-    <div class="tblwrap" id="impBody"></div>
+    <div class="implist" id="impBody"></div>
     <div class="msg">Material, espessura e modelo marcados como "pendente" ou "inferido" não foram lidos do arquivo. Confirme ou corrija antes de importar.</div>
     <div class="btns"><button type="button" id="impNo">Cancelar</button><button type="button" class="pri" id="impOk">Importar</button></div>
   </div>
@@ -566,15 +593,41 @@ async function analyze(f){
   return row}
 let IMP=null;
 function impRender(){
+  IMP.rows.forEach(fitTh);
   const mods=S.sets.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
-  $('#impBody').innerHTML=`<table class="rev"><thead><tr><th></th><th>Arquivo</th><th>Peças</th><th>Material</th><th>Espessura (mm)</th><th>Modelo</th><th>Situação</th></tr></thead><tbody>`+IMP.rows.map((r,i)=>{
+  const src=(t)=>t?`<span class="tag ${t==='manual'?'':'inf'}">${esc(t)}</span>`:'';
+  const B=IMP.bulk,nOn=IMP.rows.filter(r=>r.include&&!r.err).length;
+  const bulk=IMP.rows.length<2?'':`<div class="imp imp-bulk"><div class="imp-hd"><div class="imp-name"><b>Mesma configuração para todos</b><span class="imp-meta">Aplica nos arquivos marcados (${nOn}).</span></div>
+      <button type="button" class="pri" data-bulk-apply ${nOn?'':'disabled'}>Aplicar aos marcados</button></div>
+    <div class="imp-fields">
+      <label class="f">Material<select data-b="mat">${matOptions(B.mat)}</select></label>
+      <label class="f">Espessura${thField(B.mat,B.th,'data-b="th"')}</label>
+      <label class="f">Modelo<select data-b="model"><option value="__keep">Manter o de cada arquivo</option><option value="" ${B.model===''?'selected':''}>Sem modelo</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${B.model===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
+    </div></div>`;
+  $('#impBody').innerHTML=bulk+IMP.rows.map((r,i)=>{
     const st=r.err?`<span class="tag pend">erro: ${esc(r.err)}</span>`:r.dup?`<span class="tag pend">idêntico a ${esc(r.dup)}</span>`:'';
     const w=(r.geo?`<span class="tag pend">desenho não lido: ${esc(r.geo)}. A peça pode estar incompleta</span>`:'')+r.warn.map(x=>`<span class="tag inf">${esc(x)}</span>`).join('');
-    return `<tr data-i="${i}"><td><input type="checkbox" data-k="include" ${r.include?'checked':''} ${r.err?'disabled':''} aria-label="Importar ${esc(r.name)}"></td><td title="SHA-256 ${esc(r.hash||'')}">${esc(r.name)}<span class="tag">${esc(r.ext)} · ${Math.max(1,Math.round(r.size/1024))} KB</span></td><td data-l="Peças">${r.contours} contorno(s) → ${r.parts.length}</td><td data-l="Material"><input data-k="mat" list="mats" value="${esc(r.mat)}"><span class="tag ${r.matSrc==='manual'?'':'inf'}">${esc(r.matSrc)}</span></td><td data-l="Espessura (mm)"><input data-k="th" type="number" step=".1" min=".1" value="${esc(r.th)}"><span class="tag ${r.thSrc==='manual'?'':'inf'}">${esc(r.thSrc)}</span></td><td data-l="Modelo"><select data-k="model"><option value="">Sem modelo (pendente)</option>${mods.replace(`value="${esc(r.model)}"`,`value="${esc(r.model)}" selected`)}</select></td><td class="wide" data-l="Situação">${st}${w}${!st&&!w?'<span class="tag">ok</span>':''}</td></tr>`}).join('')+'</tbody></table>';
+    return `<div class="imp" data-i="${i}"${r.include?'':' data-off'}>
+      <div class="imp-hd"><input type="checkbox" data-k="include" ${r.include?'checked':''} ${r.err?'disabled':''} aria-label="Importar ${esc(r.name)}">
+        <div class="imp-name"><b title="SHA-256 ${esc(r.hash||'')}">${esc(r.name)}</b><span class="imp-meta">${esc(r.ext)} · ${Math.max(1,Math.round(r.size/1024))} KB · ${r.contours} contorno(s) → ${r.parts.length} peça(s)</span></div>
+        <div class="imp-st">${st}${w}${!st&&!w?'<span class="tag ok">pronto</span>':''}</div></div>
+      <div class="imp-fields">
+        <label class="f"><span class="imp-lb">Material ${src(r.matSrc)}</span><select data-k="mat">${matOptions(r.mat)}</select></label>
+        <label class="f"><span class="imp-lb">Espessura ${src(r.thSrc)}</span>${thField(r.mat,r.th,'data-k="th"')}</label>
+        <label class="f"><span class="imp-lb">Modelo${r.model?'':' <span class="tag pend">pendente</span>'}</span><select data-k="model"><option value="">Sem modelo</option>${mods.replace(`value="${esc(r.model)}"`,`value="${esc(r.model)}" selected`)}</select></label>
+      </div></div>`}).join('');
   const n=IMP.rows.filter(r=>r.include).length,p=curProj();
   $('#impHead').textContent=`Destino: ${p.code} · ${p.product}. ${n} de ${IMP.rows.length} arquivo(s) serão importados.`;$('#impOk').disabled=!n}
-function reviewImport(rows){IMP={rows};impRender();showModal('impModal','#impOk')}
-$('#impBody').addEventListener('input',e=>{const tr=e.target.closest('tr');if(!tr||!IMP)return;const r=IMP.rows[+tr.dataset.i],k=e.target.dataset.k;
+/* Espessura da barra em lote: dentro das do material escolhido. */
+function fitBulk(){const B=IMP.bulk,ts=presetThicknesses(B.mat);if(ts.length&&!ts.includes(+B.th))B.th=ts[0]}
+$('#impBody').addEventListener('click',e=>{if(!IMP||!e.target.closest('[data-bulk-apply]'))return;
+  const B=IMP.bulk,use=IMP.rows.filter(r=>r.include&&!r.err);
+  for(const r of use){r.mat=B.mat;r.matSrc='em lote';if(+B.th>0){r.th=+B.th;r.thSrc='em lote'}if(B.model!=='__keep')r.model=B.model}
+  impRender();toast('Configuração aplicada a '+use.length+' arquivo(s).','ok')});
+function reviewImport(rows){IMP={rows,bulk:{mat:(rows[0]&&rows[0].mat)||$('#defMat').value,th:(rows[0]&&rows[0].th)||+$('#defTh').value||1,model:'__keep'}};fitBulk();impRender();showModal('impModal','#impOk')}
+$('#impBody').addEventListener('input',e=>{const b=e.target.dataset.b;
+  if(b&&IMP){IMP.bulk[b]=b==='th'?+e.target.value:e.target.value;if(b==='mat'){fitBulk();impRender()}return}
+  const tr=e.target.closest('[data-i]');if(!tr||!IMP)return;const r=IMP.rows[+tr.dataset.i],k=e.target.dataset.k;
   if(k==='include'){r.include=e.target.checked;impRender();return}
   if(k==='mat'){r.mat=e.target.value;r.matSrc='manual'}if(k==='th'){r.th=+e.target.value;r.thSrc='manual'}if(k==='model')r.model=e.target.value});
 $('#impBody').addEventListener('change',e=>{if(IMP&&['mat','th','model'].includes(e.target.dataset.k))impRender()});
@@ -812,7 +865,7 @@ function hexColor(v,fb){return /^#[0-9a-fA-F]{6}$/.test(v||'')?v:fb}
 function partColor(p){if(p.groupId){const s=S.sets.find(x=>x.id===p.groupId);if(s)return s.color}return hexColor(p.color,'#8b93a1')}
 function nid(prefix){return prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function loadPresets(){return (S.store.presets||[]).filter(p=>p&&typeof p.name==='string'&&p.id)}
-function savePresets(list){if(!S.ready)return false;S.store.presets=list;hist('presets.update',{names:list.map(p=>p.name)});autosave();return true}
+function savePresets(list){if(!S.ready)return false;S.store.presets=list;hist('presets.update',{names:list.map(p=>p.name)});render();return true}
 function presetMsg(text,bad){const el=$('#pmsg');el.className='msg'+(bad?' w':' ok');el.textContent=text;toast(text,bad?'bad':'ok')}
 function status(text,bad){const el=$('#nmsg');el.className='msg'+(bad?' w':' ok');el.textContent=text;toast(text,bad?'bad':'ok')}
 /* Ao fechar, o foco volta para quem abriu o modal (teclado e leitor de tela não se perdem). */
@@ -835,65 +888,84 @@ function ask(text,yesLabel,danger){
     $('#askNo').onclick=()=>done(false);
   });
 }
+/* Preset = encaixe de um material e espessura: a chapa e os parâmetros de Encaixar. Modelos e cores ficam de fora. */
 function capturePreset(name,id){
-  const sheets={};
-  for(const k of Object.keys(S.groups)){const g=S.groups[k];if(g&&+g.w>0&&+g.h>0)sheets[k]={w:+g.w,h:+g.h}}
-  const members={},colors={};
-  for(const p of S.parts){if(p.guest)continue;if(p.groupId){(members[p.groupId]||(members[p.groupId]=[])).push(p.name)}else if(p.color)colors[p.name]=p.color}
   return {id:id||nid('p'),name,savedAt:new Date().toISOString(),
-    gap:+$('#gap').value,mar:+$('#mar').value,rot:$('#rot').value,res:$('#res').value,secs:$('#secs').value,
-    srv:$('#srv').checked,fill:$('#fill').checked,unit:$('#unit').value,tol:+$('#tol').value,
-    defMat:$('#defMat').value,defTh:+$('#defTh').value,mix:$('#mix').checked,
-    sheets,sets:S.sets.map(s=>({id:s.id,name:s.name,color:s.color,isolate:!!s.isolate,together:!!s.together})),
-    forbid:S.forbid.map(p=>[p[0],p[1]]),members,colors};
+    mat:$('#presetMat').value.trim(),th:+$('#presetTh').value,w:+$('#presetW').value,h:+$('#presetH').value,
+    gap:+$('#gap').value,mar:+$('#mar').value,rot:$('#rot').value,res:$('#res').value,secs:$('#secs').value,fill:$('#fill').checked};
 }
+function presetFieldsBad(){
+  if(!$('#presetMat').value.trim())return 'Informe o material do preset.';
+  for(const[id,what]of[['presetTh','a espessura'],['presetW','o comprimento da chapa'],['presetH','a largura da chapa']])if(!(+$('#'+id).value>0))return 'Informe '+what+' (maior que zero).';
+  return ''}
+const presetKey=p=>p.mat+' · '+(+p.th)+' mm';
+const presetLine=p=>(p.mat?presetKey(p)+' · chapa '+(+p.w)+'×'+(+p.h)+' mm · espaço '+(+p.gap)+' · margem '+(+p.mar)+' · ':'')+whenLabel(p.savedAt);
+function fillPresetFields(p){$('#presetName').value=p.name;$('#presetMat').value=p.mat||'';$('#presetTh').value=p.th||'';$('#presetW').value=p.w||'';$('#presetH').value=p.h||''}
+/* Campos vazios começam com a chapa da aba aberta, para salvar o que está na tela. */
+function prefillPreset(){
+  if(['presetMat','presetTh','presetW','presetH'].some(id=>$('#'+id).value))return;
+  const k=S.tab&&S.groups[S.tab]?S.tab:Object.keys(S.groups)[0];if(!k)return;
+  const[mat,th]=k.split(' · '),g=S.groups[k];
+  $('#presetMat').value=mat;$('#presetTh').value=parseFloat(th)||'';$('#presetW').value=g.w;$('#presetH').value=g.h}
 function setSel(id,v){const el=$('#'+id);if([...el.options].some(o=>o.value===String(v)))el.value=String(v)}
 function selectedPreset(){return loadPresets().find(p=>p.id===S.presetId)||null}
+/* Materiais da importação: os dos presets de encaixe; sem preset com material, a lista padrão do app. */
+function presetMaterials(){
+  const m=[...new Set(loadPresets().map(p=>String(p.mat||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  return m.length?m:[...$('#mats').options].map(o=>o.value)}
+const matOptions=cur=>presetMaterials().map(m=>`<option value="${esc(m)}" ${m===cur?'selected':''}>${esc(m)}</option>`).join('');
+function renderMaterials(){
+  const el=$('#defMat'),cur=el.value,list=presetMaterials();
+  el.innerHTML=matOptions(list.includes(cur)?cur:list[0]);
+  const fromPresets=loadPresets().some(p=>String(p.mat||'').trim());
+  renderDefTh();
+  $('#defMatHint').textContent=fromPresets?'Os materiais vêm dos presets de encaixe. Para incluir outro, salve um preset com ele.':'Nenhum preset com material: usando a lista padrão. Salve presets de encaixe para escolher seus materiais aqui.'}
+/* Espessuras: as dos presets do material escolhido. Material sem preset continua com campo livre. */
+function presetThicknesses(mat){const m=String(mat||'').trim().toLowerCase();
+  return [...new Set(loadPresets().filter(p=>String(p.mat||'').trim().toLowerCase()===m&&+p.th>0).map(p=>+p.th))].sort((a,b)=>a-b)}
+function thField(mat,cur,attr){const ts=presetThicknesses(mat);
+  return ts.length?`<select ${attr}>${ts.map(t=>`<option value="${t}" ${t===+cur?'selected':''}>${t} mm</option>`).join('')}</select>`:`<input ${attr} type="number" step=".1" min=".1" value="${esc(cur)}">`}
+function renderDefTh(){const mat=$('#defMat').value,cur=+$('#defTh').value,ts=presetThicknesses(mat);
+  $('#defThBox').innerHTML=thField(mat,ts.length&&!ts.includes(cur)?ts[0]:(cur||3),'id="defTh"')}
+/* Na revisão, espessura fora dos presets do material vira a primeira do preset, com aviso quando o nome do arquivo dizia outra. */
+function fitTh(r){const ts=presetThicknesses(r.mat);if(!ts.length||ts.includes(+r.th))return;
+  const was=r.thSrc==='inferida do nome'?r.th:0;r.th=ts[0];r.thSrc=was?'preset (o nome dizia '+was+' mm)':'preset'}
+$('#defMat').addEventListener('change',renderDefTh);
 function renderPresets(){
+  renderMaterials();
   const list=loadPresets();
-  $('#presetList').innerHTML=list.map(p=>`<button type="button" class="preset-item ${p.id===S.presetId?'on':''}" data-pid="${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(whenLabel(p.savedAt))}</span></button>`).join('')||'<div class="msg">Nenhum preset salvo.</div>';
+  $('#presetList').innerHTML=list.map(p=>`<button type="button" class="preset-item ${p.id===S.presetId?'on':''}" data-pid="${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(presetLine(p))}</span></button>`).join('')||'<div class="msg">Nenhum preset salvo.</div>';
   const on=!!selectedPreset();
   ['presetApply','presetUpdate','presetDup','presetDel'].forEach(id=>$('#'+id).disabled=!on);
 }
-function applyPreset(preset){
-  setSel('rot',preset.rot);setSel('res',preset.res);setSecs(preset.secs,true);setSel('unit',preset.unit);
+function presetParams(preset){
+  setSel('rot',preset.rot);setSel('res',preset.res);setSecs(preset.secs,true);
   if(Number.isFinite(+preset.gap)) $('#gap').value=+preset.gap;
   if(Number.isFinite(+preset.mar)) $('#mar').value=+preset.mar;
-  if(Number.isFinite(+preset.tol)) $('#tol').value=+preset.tol;
-  if(Number.isFinite(+preset.defTh)) $('#defTh').value=+preset.defTh;
-  if(typeof preset.defMat==='string') $('#defMat').value=preset.defMat;
-  /* o motor do servidor (Rust) é sempre a primeira opção: preset não o desliga */$('#fill').checked=preset.fill!==false;$('#mix').checked=preset.mix!==false;
-  S.sets=(preset.sets||[]).map((s,i)=>({id:String(s.id||nid('c')),name:String(s.name||('Conjunto '+(i+1))),color:hexColor(s.color,PALETTE[i%PALETTE.length]),isolate:!!s.isolate,together:!!s.together}));uniqueColors();
-  const ids=new Set(S.sets.map(s=>s.id));
-  S.forbid=(preset.forbid||[]).filter(p=>Array.isArray(p)&&ids.has(String(p[0]))&&ids.has(String(p[1]))&&String(p[0])!==String(p[1])).map(p=>[String(p[0]),String(p[1])]);
-  S.sheetMemory={};
+  /* o motor do servidor (Rust) é sempre a primeira opção: preset não o desliga */$('#fill').checked=preset.fill!==false}
+function applyPreset(preset){
+  presetParams(preset);
+  // presets antigos guardavam várias chapas por chave; os novos, a do seu material e espessura
+  const sheets={...(preset.sheets||{})};
+  if(preset.mat&&+preset.th>0&&+preset.w>0&&+preset.h>0) sheets[presetKey(preset)]={w:+preset.w,h:+preset.h};
   let matched=0;
-  for(const k of Object.keys(preset.sheets||{})){const g=preset.sheets[k];if(g&&+g.w>0&&+g.h>0)S.sheetMemory[k]={w:+g.w,h:+g.h}}
-  for(const k of Object.keys(S.groups)){if(S.sheetMemory[k]){S.groups[k]={...S.sheetMemory[k]};matched++}}
-  const byName={};
-  for(const s of S.sets) for(const n of ((preset.members||{})[s.id]||[])) byName[n]=s.id;
-  let linked=0,cleared=0;
-  for(const p of S.parts){if(p.guest)continue;
-    if(byName[p.name]&&ids.has(byName[p.name])){p.groupId=byName[p.name];linked++}
-    else if(p.groupId&&!ids.has(p.groupId)){p.groupId='';cleared++}
-    if(!p.groupId&&preset.colors&&hexColor(preset.colors[p.name],'')) p.color=preset.colors[p.name];
-  }
+  for(const[k,g]of Object.entries(sheets)){if(!(g&&+g.w>0&&+g.h>0))continue;
+    for(const key of [k,...Object.keys(S.groups).filter(x=>x!==k&&x.toLowerCase()===k.toLowerCase())]){S.sheetMemory[key]={w:+g.w,h:+g.h};if(S.groups[key]){S.groups[key]={w:+g.w,h:+g.h};matched++}}}
   S.activePreset={id:preset.id,name:preset.name};
   S.presetId=preset.id;
   S.res=null;S.snap=null;S.pdf=null;
   render();renderPresets();
   let msg='Preset aplicado.';
-  if(matched) msg+=' Medidas de '+matched+' chapa(s) atualizadas.';
-  else if(Object.keys(S.sheetMemory).length) msg+=' As medidas entram quando o material correspondente aparecer.';
-  if(linked) msg+=' '+linked+' peça(s) entraram no conjunto pelo nome.';
-  if(cleared) msg+=' '+cleared+' peça(s) saíram de conjunto que este preset não tem.';
+  if(matched) msg+=' Chapa de '+matched+' material(is) atualizada.';
+  else if(Object.keys(sheets).length) msg+=' A chapa entra quando o material '+(preset.mat?presetKey(preset):'correspondente')+' aparecer no projeto.';
   presetMsg(msg,false);
 }
-$('#presetList').onclick=e=>{const b=e.target.closest('[data-pid]');if(!b)return;S.presetId=b.dataset.pid;const p=selectedPreset();if(p)$('#presetName').value=p.name;$('#pmsg').textContent='Selecionado: '+p.name+'. Aplicar carrega estas configurações.';$('#pmsg').className='msg';renderPresets()};
+$('#presetList').onclick=e=>{const b=e.target.closest('[data-pid]');if(!b)return;S.presetId=b.dataset.pid;const p=selectedPreset();if(p)fillPresetFields(p);$('#pmsg').textContent='Selecionado: '+p.name+'. Aplicar carrega estas configurações.';$('#pmsg').className='msg';renderPresets()};
 $('#presetName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#presetSave').click()}});
 $('#presetSave').onclick=async()=>{
   const name=$('#presetName').value.trim();
   if(!name){presetMsg('Dê um nome ao preset.',true);return}
+  const bad=presetFieldsBad();if(bad){presetMsg(bad,true);return}
   const list=loadPresets();
   const hit=list.find(p=>p.name.toLowerCase()===name.toLowerCase());
   if(hit && !await ask('Já existe um preset com o nome "'+name+'". Substituir as configurações salvas?','Substituir',true)) return;
@@ -906,12 +978,13 @@ $('#presetSave').onclick=async()=>{
 };
 $('#presetApply').onclick=async()=>{
   const p=selectedPreset();if(!p){presetMsg('Selecione um preset.',true);return}
-  if(!await ask('Aplicar o preset "'+p.name+'" substitui margens, chapas, otimização e conjuntos de cores. As peças importadas permanecem. Continuar?','Aplicar',false)) return;
+  if(!await ask('Aplicar o preset "'+p.name+'" troca '+(p.mat?'a chapa de '+presetKey(p)+' e ':'')+'os parâmetros de Encaixar (espaço, margem, rotação, tempo). Modelos, cores e peças não mudam. Continuar?','Aplicar',false)) return;
   applyPreset(p);
 };
 $('#presetUpdate').onclick=async()=>{
   const p=selectedPreset();if(!p){presetMsg('Selecione um preset para atualizar.',true);return}
   const name=$('#presetName').value.trim()||p.name;
+  const bad=presetFieldsBad();if(bad){presetMsg(bad,true);return}
   if(!await ask('Substituir o preset "'+p.name+'" pelas configurações atuais?','Substituir',true)) return;
   const list=loadPresets();
   const clash=list.find(x=>x.id!==p.id&&x.name.toLowerCase()===name.toLowerCase());
@@ -927,13 +1000,7 @@ $('#presetDup').onclick=()=>{
   const list=loadPresets();
   let name=p.name+' cópia',n=2;
   while(list.some(x=>x.name.toLowerCase()===name.toLowerCase())) name=p.name+' cópia '+n++;
-  const item=capturePreset(name,nid('p'));
-  item.sets=JSON.parse(JSON.stringify(p.sets||[]));
-  item.forbid=JSON.parse(JSON.stringify(p.forbid||[]));
-  item.sheets=JSON.parse(JSON.stringify(p.sheets||{}));
-  item.members=JSON.parse(JSON.stringify(p.members||{}));
-  item.colors=JSON.parse(JSON.stringify(p.colors||{}));
-  item.gap=p.gap;item.mar=p.mar;item.rot=p.rot;item.res=p.res;item.secs=p.secs;item.srv=p.srv;item.fill=p.fill;item.unit=p.unit;item.tol=p.tol;item.defMat=p.defMat;item.defTh=p.defTh;item.mix=p.mix;
+  const item={...JSON.parse(JSON.stringify(p)),id:nid('p'),name,savedAt:new Date().toISOString()};
   if(!savePresets(list.concat(item))){presetMsg('Não foi possível gravar o preset neste navegador.',true);return}
   S.presetId=item.id;$('#presetName').value=item.name;renderPresets();presetMsg('Preset duplicado como "'+name+'".',false);
 };
@@ -1047,6 +1114,15 @@ $('#forbids').onclick=e=>{
 
 /* ---------- interface ---------- */
 const gk=p=>p.mat+' · '+p.th+' mm';
+/* Opções de "Chapa padrão": os presets salvos (os deste material e espessura primeiro) e as medidas comuns. */
+function sheetOptions(k,g){
+  const lk=k.toLowerCase(),mine=p=>p.mat&&presetKey(p).toLowerCase()===lk;
+  const ps=loadPresets().filter(p=>+p.w>0&&+p.h>0).sort((a,b)=>mine(b)-mine(a));
+  const hit=ps.find(p=>mine(p)&&+p.w===g.w&&+p.h===g.h);
+  const sizes=[[2750,1840],[2750,1850],[2440,1220],[3000,1250],[3000,1500]];
+  return '<option value="">Personalizada</option>'+
+    (ps.length?'<optgroup label="Presets">'+ps.map(p=>`<option value="p:${esc(p.id)}" ${p===hit?'selected':''}>${esc(p.name)} · ${esc(+p.w)}×${esc(+p.h)} mm</option>`).join('')+'</optgroup>':'')+
+    '<optgroup label="Medidas comuns">'+sizes.map(([w,hh])=>`<option value="${w}x${hh}" ${!hit&&g.w===w&&g.h===hh?'selected':''}>${w}×${hh} mm</option>`).join('')+'</optgroup>'}
 function groupsOf(){const o={};S.parts.filter(p=>p.on).forEach(p=>(o[gk(p)]||(o[gk(p)]=[])).push(p));return o}
 const path=rs=>rs.map(r=>'M'+r.map(p=>p[0].toFixed(1)+' '+(-p[1]).toFixed(1)).join('L')+'Z').join('');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1098,11 +1174,11 @@ function renderCore(){
   const G=groupsOf();
   Object.keys(G).forEach(k=>{if(!S.groups[k]){const mem=S.sheetMemory&&S.sheetMemory[k];if(mem&&+mem.w>0&&+mem.h>0)S.groups[k]={w:+mem.w,h:+mem.h};else{const t=+k.split('· ')[1].replace(' mm','');const mdf=/mdf|mdp|compens/i.test(k);S.groups[k]=mdf?{w:2750,h:1840}:{w:3000,h:t>=6?1500:1250}}}});
   $('#groups').innerHTML=Object.keys(G).map(k=>{const g=S.groups[k],q=G[k].reduce((s,p)=>s+p.qty,0),a=G[k].reduce((s,p)=>s+p.A*p.qty,0)/1e6;
-   return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset><option value="">Personalizada</option>${[[2750,1840],[2750,1850],[2440,1220],[3000,1250],[3000,1500]].map(([w,hh])=>`<option value="${w}x${hh}" ${g.w===w&&g.h===hh?'selected':''}>${w}×${hh} mm</option>`).join('')}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${esc(g.w)}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${esc(g.h)}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
+   return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset>${sheetOptions(k,g)}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${esc(g.w)}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${esc(g.h)}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
   renderLegend();updateColorButtons();
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
-  const ready=!!(R&&S.snap);
+  const ready=!!(R&&S.snap);$('#xLock').hidden=ready;patPreview();
   ['xsvg','xdxf','xdwg','xall','xeps','xepsall','pdfPrev','pdfGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
   const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
@@ -1145,6 +1221,10 @@ document.addEventListener('change',e=>{
   if(pe&&t.dataset.f==='groupId'){const p=S.parts[+pe.dataset.i];if(p.guest)return;moveToSet(p,t.value);if(rulesActive()){S.res=null;S.snap=null;S.pdf=null;$('#nmsg').className='msg w';$('#nmsg').textContent='Conjunto alterado. Encaixe de novo para a regra valer.'}render();return}
   const pr=t.closest('.grp');
   if(pr&&t.dataset.g){render();return}
+  if(pr&&t.hasAttribute('data-preset')&&t.value.startsWith('p:')){const p=loadPresets().find(x=>x.id===t.value.slice(2));if(!p)return render();
+    const k=pr.dataset.k;S.groups[k]={w:+p.w,h:+p.h};S.sheetMemory[k]={w:+p.w,h:+p.h};presetParams(p);
+    S.activePreset={id:p.id,name:p.name};S.presetId=p.id;S.res=null;S.snap=null;S.pdf=null;render();renderPresets();
+    toast('Preset "'+p.name+'" aplicado: chapa '+(+p.w)+'×'+(+p.h)+' mm, espaço '+(+p.gap)+', margem '+(+p.mar)+'.','ok');return}
   if(pr&&t.hasAttribute('data-preset')&&t.value){const[w,hh]=t.value.split('x').map(Number);Object.assign(S.groups[pr.dataset.k],{w,h:hh});S.sheetMemory[pr.dataset.k]={w,h:hh};S.res=null;S.snap=null;S.pdf=null;render();return}
   /* depois do Tab: o foco já está no próximo campo e renderCore o devolve no campo recriado */
   if(pe&&['mat','th','on','qty'].includes(t.dataset.f))setTimeout(render)});
@@ -1514,8 +1594,8 @@ $('#xdwg').onclick=async()=>{
   catch(e){status(e.message,true)}};
 renderPresets();render();
 /* ---------- exportação EPS ---------- */
-const plain=t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-const nameFrom=(pat,ctx)=>safeName(plain(pat.replace(/\{(\w+)\}/g,(_,k)=>ctx[k]==null?'':ctx[k])).replace(/\s+/g,'_').replace(/_{2,}/g,'_'));
+function plain(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function nameFrom(pat,ctx){return safeName(plain(pat.replace(/\{(\w+)\}/g,(_,k)=>ctx[k]==null?'':ctx[k])).replace(/\s+/g,'_').replace(/_{2,}/g,'_'))}
 function epsPlan(keys){
   const p=curProj(),pat0=($('#namePat').value||S.store.settings.naming).trim()||S.store.settings.naming,pat=/\{seq\}/.test(pat0)?pat0:pat0+'_{seq}';
   const items=[],used={};
@@ -1544,7 +1624,10 @@ async function exportEps(keys){
   flush()}
 $('#xeps').onclick=()=>exportEps([S.tab]);
 $('#xepsall').onclick=()=>exportEps(Object.keys(S.res));
-$('#namePat').addEventListener('change',()=>{S.store.settings.naming=$('#namePat').value.trim()||'{projeto}_{material}_{espessura}MM_{seq}';autosave()});
+/* Prévia do nome com o projeto e a chapa da aba aberta (sequência ilustrativa 001). */
+function patPreview(){const p=curProj(),k=S.tab||Object.keys(S.groups)[0]||'Material · 3 mm',[mat,thTxt]=k.split(' · ');
+  const pat0=($('#namePat').value||S.store.settings.naming).trim()||S.store.settings.naming,pat=/\{seq\}/.test(pat0)?pat0:pat0+'_{seq}';
+  $('#patPrev').textContent=nameFrom(pat,{projeto:p?p.code:'PROJETO',produto:p?p.product:'',material:mat,espessura:String(thTxt||'').replace(' mm',''),lote:p?p.lot:'',ordem:p?p.order:'',seq:'001'})+'.eps'}
 
 /* ---------- início ---------- */
 (async()=>{
@@ -1555,7 +1638,7 @@ $('#namePat').addEventListener('change',()=>{S.store.settings.naming=$('#namePat
     sent.meta=JSON.stringify(metaPatch());sent.models=JSON.stringify(S.sets);uniqueColors();
     let migrated=false;
     try{const old=JSON.parse(localStorage.getItem(STORE)||'{}').presets;if(Array.isArray(old)&&old.length&&!S.store.presets.length){S.store.presets=old;migrated=true}}catch(e){}
-    $('#namePat').value=S.store.settings.naming;S.ready=true;renderPresets();
+    S.ready=true;renderPresets();
     const last=S.store.settings.last,id=S.store.projects.some(p=>p.id===last)?last:(S.store.projects[0]||{}).id;
     await openProject(id);
     if(migrated){hist('presets.migrate',{n:S.store.presets.length});autosave()}
@@ -1566,6 +1649,7 @@ $('#namePat').addEventListener('change',()=>{S.store.settings.naming=$('#namePat
 /* ---------- interface: navegação, painel e zoom (só aparência; não toca em dados nem no encaixe) ---------- */
 const mainEl=$('main'),appEl=$('#app');
 function showView(v,toggle){
+  if(v==='presets')prefillPreset();
   const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
   mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
   const open=!mainEl.classList.contains('nopanel');

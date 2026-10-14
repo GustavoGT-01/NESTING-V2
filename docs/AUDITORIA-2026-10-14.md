@@ -57,7 +57,7 @@ Principais correções:
 5. Separar o JS do `index.html` em arquivos testáveis (permite CSP sem `unsafe-inline`).
 6. Baixa gravidade: keepalive limitado a ~64 KB ao fechar a aba; edição feita durante a troca de projeto; snapshot só na partida; `rev` opcional por compatibilidade.
 
-Dependem de decisão: aviso de produção em dobro no encaixe conjunto; apagar o `LEIA-ME.md` (defasado).
+Depende de decisão: aviso de produção em dobro no encaixe conjunto. (O `LEIA-ME.md` defasado foi removido depois, a pedido.)
 
 ## Escalabilidade
 
