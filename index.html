@@ -92,30 +92,20 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .tag.inf{color:#a5b4fc;background:color-mix(in srgb,var(--alt) 14%,transparent);border-color:color-mix(in srgb,var(--alt) 40%,transparent)}
 /* ---------- cartões do painel: peças, modelos, chapas, presets ---------- */
 .parts{display:flex;flex-direction:column;gap:var(--s2)}
-.part,.grp,.setcard,.pair{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r)}
-.part{display:grid;grid-template-columns:18px 56px minmax(0,1fr);gap:8px 10px;align-items:center;padding:10px;transition:border-color .15s}
-.part:hover{border-color:var(--ln2)}.part.off{opacity:.45}.part.pick{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 7%,var(--sf))}.part.pend{box-shadow:inset 3px 0 0 var(--warn)}
-.part svg{width:56px;height:42px;background:var(--fld);border-radius:4px}
-.part .n{font-weight:600;display:flex;align-items:center;flex-wrap:wrap;row-gap:2px;overflow-wrap:anywhere}
-.part .m{font-size:12.5px;color:var(--mu);overflow-wrap:anywhere}
-.part .c{grid-column:1/-1;display:grid;grid-template-columns:68px minmax(0,1fr) 76px;gap:6px;align-items:center}
-.part .c2{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--mu)}.part .c2 select{padding:6px 8px;width:auto;flex:1 1 90px;min-width:0}.part .c2 button{padding:5px 10px}
-.part .c label,.part .c2 label{font-size:12.5px;color:var(--mu);display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer}
+.grp,.setcard,.pair{background:var(--sf);border:1px solid var(--ln);border-radius:var(--r)}
+.addrow{display:flex;gap:8px}.addrow input{flex:1}.addrow button{flex:0 0 auto;padding-inline:18px}
+.setstats{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--mu)}.setstats b{color:var(--tx)}
+.setn{display:flex;align-items:center;gap:6px;margin-left:auto}.setn input{width:64px;padding:5px 8px;text-align:center}
 .grp,.setcard{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px}.setcard .m,.grp .t,.msg,.pair{overflow-wrap:anywhere}
 .grp .t,.setcard .top{font-weight:600}.grp .t span,.setcard .m{font-size:12.5px;color:var(--mu);font-weight:400}.grp .t span{margin-left:6px}
 .grp .row3{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
 .setcard .top{display:flex;gap:8px;align-items:center}.setcard .top input[type=text]{flex:1;font-weight:600}
-.setcard .flags{display:flex;flex-direction:column;gap:6px}.setcard .flags label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mu);cursor:pointer}
+.setcard .flags{display:grid;grid-template-columns:1fr 1fr;gap:6px}.setcard .flags label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mu);cursor:pointer}
 .pair{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;padding:6px 6px 6px 10px}
 .preset-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto}
 .preset-item{flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:9px 12px;background:var(--sf);text-align:left}
 .preset-item.on,.preset-item.on:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--sf))}.preset-item span{font-size:12.5px;color:var(--mu);font-weight:400}
-.proj{display:flex;flex-direction:column;gap:8px;background:var(--sf);border:1px solid var(--ln);border-radius:var(--r);padding:10px 12px;transition:border-color .15s}
-.proj:hover{border-color:var(--ln2)}.proj.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 7%,var(--sf))}.proj.lk{border-color:color-mix(in srgb,var(--alt) 70%,transparent)}
-.projopen{flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:0;background:none;border:0;text-align:left}
-.projopen:hover:not(:disabled){background:none}.projopen b{font-size:15px}.projopen span{font-size:12.5px;color:var(--mu);font-weight:400;overflow-wrap:anywhere}.projopen span:empty{display:none}
-.proj .tag,.top .tag{margin:0;align-self:flex-start}.top .tag{align-self:center}.tag.on{color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent);border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
-.part.guest{border-style:dashed}
+.top .tag{margin:0;align-self:flex-start}.top .tag{align-self:center}.tag.on{color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent);border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
 /* ---------- visualizador ---------- */
 .viewbar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:var(--s3);padding:10px var(--s4);background:color-mix(in srgb,var(--bg) 92%,transparent);border-bottom:1px solid var(--ln)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
@@ -164,6 +154,95 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .x-prev{font-size:12.5px;color:var(--mu);overflow-wrap:anywhere}.x-prev b{color:var(--tx);font-weight:600}
 .fmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fmt-grid button{flex-direction:column;align-items:flex-start;gap:1px;padding:10px 12px;text-align:left}
 .fmt-grid b{font-size:14px}.fmt-grid span{font-size:12px;color:var(--mu);font-weight:400}
+/* ---------- modelos (painel) ---------- */
+#legend{gap:2px}
+.mrow{display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;padding:9px 10px;background:transparent;border:1px solid transparent;border-radius:var(--r2);text-align:left;font-weight:500;color:var(--tx)}
+.mrow:hover:not(:disabled){background:var(--sf);border-color:transparent}
+.mrow.on,.mrow.on:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 13%,transparent);color:var(--ac)}
+.mdot{width:12px;height:12px;border-radius:4px;flex:0 0 auto;transition:transform .18s var(--ease)}.mrow:hover .mdot{transform:scale(1.2)}
+.mdot.all{background:var(--mu)}.mdot.pend{background:var(--warn)}
+.mname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mnum{font-size:12.5px;color:var(--mu)}.mrow.on .mnum{color:var(--ac)}
+.mhead{display:flex;align-items:center;gap:2px}.mhead .mrow{flex:1;min-width:0}
+.medit{width:34px;height:34px;padding:0;background:transparent;border-color:transparent;color:var(--mu)}.medit[aria-expanded=true]{color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent)}
+.mbody{margin:4px 0 10px 22px;animation:in .22s var(--ease)}
+/* ---------- quadro de projetos ---------- */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-content:start;align-items:start}
+.pcard{position:relative;display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--sf);border:1px solid transparent;border-radius:12px;transition:transform .18s var(--ease),background-color .18s,border-color .18s}
+.pcard:hover{transform:translateY(-2px);background:var(--sf2)}
+.pcard.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--sf))}
+.pcard.lk{border-color:color-mix(in srgb,var(--alt) 65%,transparent)}
+.pcard-open{justify-content:flex-start;align-items:center;gap:12px;width:100%;padding:0;background:none;border:0;text-align:left}
+.pcard-open:hover:not(:disabled){background:none}.pcard-open::after{content:"";position:absolute;inset:0;border-radius:12px}
+.pcard-mark{flex:0 0 auto;width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:15px;color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--bg2));transition:transform .2s var(--ease)}
+.pcard:hover .pcard-mark{transform:scale(1.06)}.pcard.on .pcard-mark{background:var(--ac);color:var(--on)}
+.pcard-txt{display:flex;flex-direction:column;gap:2px;min-width:0}.pcard-txt b{font-size:16px;font-weight:650;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard-txt span{font-size:13px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--mu)}.pcard-meta:empty{display:none}
+.pcard-foot{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid var(--ln)}
+.pcard-foot .tag{margin:0}.pcard-hint{font-size:12.5px;color:var(--mu);transition:color .18s,transform .18s var(--ease)}
+.pcard:hover .pcard-hint{color:var(--ac);transform:translateX(2px)}
+.pcard-link{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.pcard-foot .pcard-hint{margin-left:auto}
+.pcard-del{width:30px;height:30px;padding:0;background:transparent;border-color:transparent;color:var(--mu);opacity:.55;transition:opacity .18s,color .18s,background-color .18s}
+.pcard:hover .pcard-del,.pcard-del:focus-visible{opacity:1}
+.pcard-del:hover:not(:disabled),.psum-del:hover:not(:disabled){color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent);border-color:transparent}
+.psum-del{align-self:flex-start;justify-content:flex-start;background:transparent;border-color:transparent;color:var(--mu);padding:6px 4px}.psum-del .ic{width:16px;height:16px}
+.psum{display:flex;flex-direction:column;gap:14px}
+.psum-hd{display:flex;align-items:center;gap:12px}.psum-hd div{display:flex;flex-direction:column;min-width:0}.psum-hd b{font-size:17px;font-weight:650}.psum-hd span{font-size:13px;color:var(--mu)}
+.psum-dl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}.psum-dl div{background:var(--sf);border-radius:var(--r2);padding:10px 12px}
+.psum-dl dt{font-size:12px;color:var(--mu)}.psum-dl dd{margin:2px 0 0;font-size:18px;font-weight:650;overflow-wrap:anywhere}
+.psum-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.psum-links b{width:100%;font-size:13px}.psum-links .tag{margin:0}
+/* ---------- quadro de peças (área central) ---------- */
+.board{display:none;flex-direction:column;gap:var(--s4);padding:var(--s5);flex:1}
+main[data-view="pecas"] #board,main[data-view="projetos"] #pboard{display:flex;animation:fade .25s var(--ease)}
+main[data-view="pecas"] .viewbar,main[data-view="pecas"] #stage,main[data-view="projetos"] .viewbar,main[data-view="projetos"] #stage{display:none}
+.board.enter .tile,.board.enter .pcard{animation:in .36s var(--ease) both;animation-delay:calc(min(var(--i),14) * 28ms)}
+.board-hd{display:flex;flex-direction:column;gap:12px}
+.board-title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.board-title button{margin-left:auto;align-self:center}.board-title h2{font-size:24px;font-weight:650;letter-spacing:-.015em}.board-title .cnt{margin:0}
+.board-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.board-tools input{flex:1 1 220px;max-width:340px}.board-tools select{width:auto;min-width:180px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px;align-content:start;align-items:start}
+.tile{position:relative;display:flex;flex-direction:column;background:var(--sf);border:1px solid transparent;border-radius:12px;overflow:hidden;transition:transform .18s var(--ease),border-color .18s,background-color .18s,opacity .18s}
+.tile::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--c);z-index:1}.tile.pend::before{background:var(--warn)}
+.tile:hover{transform:translateY(-2px);background:var(--sf2)}
+.tile.pick{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--sf))}
+.tile.off .tile-art svg{opacity:.35}.tile.guest{border-style:dashed;border-color:var(--ln2)}
+.tile-art{position:relative;height:128px;padding:18px 16px 14px;background:var(--bg2);display:grid;place-items:center;cursor:pointer}
+.tile-art svg{width:100%;height:100%;transition:transform .25s var(--ease)}.tile:hover .tile-art svg{transform:scale(1.04)}
+.tile-check{position:absolute;top:10px;left:10px;line-height:0}
+.tile-check input{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;border-radius:50%;border:2px solid var(--ln2);background:var(--bg);display:grid;place-items:center;cursor:pointer;transition:background-color .15s,border-color .15s,transform .14s var(--ease)}
+.tile-check input:hover{border-color:var(--ac)}.tile-check input:active{transform:scale(.9)}
+.tile-check input:checked{background:var(--ac);border-color:var(--ac)}
+.tile-check input:checked::after{content:"";width:5px;height:10px;border:solid var(--on);border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg);animation:pop .2s var(--ease)}
+.tile-flag{position:absolute;top:10px;right:10px;font-size:11.5px;color:var(--mu);background:var(--bg);padding:2px 8px;border-radius:99px}
+.tile-body{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;min-width:0}
+.tile-name{font-size:15px;font-weight:650;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile-meta{font-size:12.5px;color:var(--mu);margin-top:-4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile-tags{display:flex;gap:4px;flex-wrap:wrap}.tile-tags .tag{margin:0}
+.tile-ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.tile-model{padding:6px 8px}
+.stepper{display:flex;align-items:center;background:var(--fld);border:1px solid var(--ln);border-radius:var(--r2);overflow:hidden}
+.stepper button{width:28px;height:32px;padding:0;border:0;border-radius:0;background:transparent;font-size:17px;line-height:1;color:var(--mu)}
+.stepper button:hover:not(:disabled){background:var(--sf3);color:var(--tx)}
+.stepper input{width:36px;border:0;border-radius:0;background:transparent;text-align:center;padding:6px 0;font-weight:600;-moz-appearance:textfield}
+.stepper input::-webkit-inner-spin-button,.stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.stepper input:focus-visible{box-shadow:none;outline:2px solid var(--ac);outline-offset:-2px}
+.tile-more>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mu);padding:2px 0;border-radius:4px}
+.tile-more>summary::-webkit-details-marker{display:none}
+.tile-more>summary::before{content:"";width:5px;height:5px;border:solid currentColor;border-width:0 1.75px 1.75px 0;transform:rotate(-45deg);transition:transform .18s var(--ease)}
+.tile-more[open]>summary::before{transform:rotate(45deg)}.tile-more>summary:hover{color:var(--tx)}
+.tile-more-in{display:flex;flex-direction:column;gap:10px;padding-top:10px;animation:in .2s var(--ease)}
+.tile-grid{display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:8px}.tile-grid input{padding:6px 8px}
+.tile-opts{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:12.5px;color:var(--mu)}.tile-opts label{display:flex;align-items:center;gap:6px;cursor:pointer}.tile-opts select{width:auto;padding:5px 8px}
+.tile-del{justify-content:flex-start;background:transparent;border-color:transparent;color:var(--mu);padding:6px 4px}
+.tile-del .ic{width:16px;height:16px}.tile-del:hover:not(:disabled){color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);border-color:transparent}
+.board-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:56px 20px;color:var(--mu);text-align:center;background:var(--sf);border-radius:12px}
+.board-empty b{color:var(--tx);font-size:18px}.board-empty button{margin-top:8px}
+/* barra de ações: aparece quando há peça marcada e flutua sobre o quadro */
+.actbar{position:sticky;bottom:18px;align-self:center;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;max-width:min(720px,100%);padding:10px 12px;background:var(--sf2);border:1px solid var(--ln2);border-radius:14px;box-shadow:var(--sh);
+  opacity:0;transform:translateY(20px) scale(.98);visibility:hidden;pointer-events:none;transition:opacity .2s var(--ease),transform .26s var(--ease),visibility 0s linear .26s}
+.actbar.on{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition-delay:0s}
+body:has(.actbar.on) .toast{bottom:96px}
+#selInfo{font-weight:650;padding:0 8px 0 4px;white-space:nowrap}.actbar select{width:auto;min-width:190px}
+@keyframes pop{from{transform:translateY(-1px) rotate(45deg) scale(.3)}}
 .tag.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
 .paper{background:#fff;color:#16181b;padding:20px;border-radius:4px}.paper h2{font-size:16px;letter-spacing:0;margin:18px 0 8px;color:#16181b}.paper h2:first-child{margin-top:0}
 .paper p{margin:0 0 6px;font-size:13px}.paper table{width:100%;border-collapse:collapse;font-size:12.5px;margin:0 0 8px}
@@ -199,7 +278,7 @@ main,main.nopanel{display:block}.panel{border-left:0;box-shadow:none;border-bott
 .cv svg{max-height:none}.zoomed .cv{max-height:70vh}
 button,select,input:not([type=checkbox]):not([type=color]){min-height:40px}button.icon{width:40px}input:not([type=checkbox]):not([type=color]),select,.f input,.f select{font-size:16px}
 input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:40px}
-.part .c{grid-template-columns:72px minmax(0,1fr) 80px}
+.setcard .flags{grid-template-columns:1fr}.board{padding:var(--s3)}.tiles{grid-template-columns:1fr}.actbar{bottom:76px;max-width:100%}.actbar select{flex:1 1 100%}.board-tools input,.board-tools select{flex:1 1 100%;max-width:none}
 .modal{padding:8px}.modal .box{padding:var(--s4);max-height:94vh;max-height:94dvh}
 .toast{left:8px;right:8px;bottom:72px;transform:none;max-width:none;animation-name:fade}
 .imp-fields{grid-template-columns:1fr}.imp-hd{flex-wrap:wrap}.imp-st{max-width:none;justify-content:flex-start}}
@@ -218,6 +297,8 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
   <symbol id="i-presets" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></symbol>
@@ -253,12 +334,9 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
 </header>
 <main data-view="projetos">
 <aside class="panel" id="panel" aria-label="Painel de apoio">
-  <section class="sec" data-view="projetos"><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><h2>Projetos</h2></header><div class="body">
-    <label class="f">Buscar<input id="projFilter" type="search" autocomplete="off" placeholder="Código, produto, OP ou lote…"></label>
-    <div class="msg">Clique em um projeto para abri-lo. Marque “Juntar ao encaixe” para encaixar as peças de outro projeto junto com o projeto aberto.</div>
-    <div class="parts" id="projList"></div>
+  <section class="sec" data-view="projetos"><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><h2>Projeto aberto</h2></header><div class="body">
+    <div id="projSummary"></div>
     <div class="msg ok" id="linkInfo"></div>
-    <div class="btns"><button type="button" class="full" id="projNew2"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
   </div></section>
   <section class="sec" data-view="import" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg><h2>Importar</h2><span class="cnt" id="projInfo"></span></header><div class="body">
     <label class="drop" id="drop"><input id="file" type="file" accept=".dxf,.dwg,.svg" multiple hidden>
@@ -275,17 +353,9 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
     <datalist id="mats"><option>Aço carbono</option><option>Inox 304</option><option>Alumínio</option><option>Galvanizado</option><option>MDF</option></datalist>
   
   </div></section>
-  <section class="sec" data-view="pecas" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-models"/></svg><h2>Modelos e cores</h2></header><div class="body">
-    <div class="msg">A cor identifica o modelo da peça e não muda com a espessura nem com o arquivo. O modelo pode ser criado antes de importar. A cor é escolhida sozinha e nunca se repete entre modelos.</div>
-    <label class="f">Nome do modelo<input id="setName" autocomplete="off" placeholder="Bacio de poltrona, Lateral, Travessa"></label>
-    <div class="btns">
-      <button type="button" id="newSet" class="full">Criar modelo</button>
-      <button type="button" id="applyColor" disabled>Aplicar às marcadas</button>
-      <button type="button" id="clearGroup" disabled>Tirar do modelo</button>
-      <button type="button" id="pickAll">Marcar todas</button>
-      <button type="button" id="pickNone">Limpar marcas</button>
-    </div>
-    <div class="msg" id="selInfo"></div>
+  <section class="sec" data-view="pecas" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-models"/></svg><h2>Modelos</h2></header><div class="body">
+    <div class="msg">Clique num modelo para ver só as peças dele. O lápis edita cor, nome, quantidade e regras.</div>
+    <div class="addrow"><input id="setName" autocomplete="off" placeholder="Novo modelo: Bacio, Lateral, Travessa…" aria-label="Nome do novo modelo"><button type="button" id="newSet" class="pri">Criar</button></div>
     <div id="legend" class="parts"></div>
     <details><summary class="sub">Regras de chapa entre modelos</summary><div class="subbody">
       <label class="f chk"><input type="checkbox" id="mix" checked> Permitir modelos diferentes na mesma chapa</label>
@@ -293,9 +363,6 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
       <div class="row"><label class="f">Não misturar<select id="fa"></select></label><label class="f">com<select id="fb"></select></label></div>
       <button type="button" id="forbidAdd">Impedir mistura</button><div id="forbids" class="parts"></div></div></details>
   
-  </div></section>
-  <section class="sec" data-view="pecas" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-parts"/></svg><h2>Peças</h2><span class="cnt" id="pcount"></span></header><div class="body">
-<div class="btns"><button type="button" class="danger" id="delPicked" disabled>Excluir marcadas</button></div><div class="parts" id="parts"></div>
   </div></section>
   <section class="sec" data-view="encaixe" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg><h2>Encaixar</h2></header><div class="body">
     <div id="groups" class="parts"></div>
@@ -363,6 +430,25 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
     <div class="zoom" role="group" aria-label="Zoom das chapas"><button type="button" class="icon" id="zOut" aria-label="Diminuir zoom" title="Diminuir zoom"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button><output id="zVal">Ajustado</output><button type="button" class="icon" id="zIn" aria-label="Aumentar zoom" title="Aumentar zoom"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button><button type="button" class="icon" id="zFit" aria-label="Ajustar à tela" title="Ajustar à tela"><svg class="ic" aria-hidden="true"><use href="#i-fit"/></svg></button></div>
   </div>
   <div class="runbar"><div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div><div class="msg" id="nmsg"></div></div>
+  <section class="board" id="pboard" aria-label="Projetos">
+    <header class="board-hd">
+      <div class="board-title"><h2>Projetos</h2><span class="cnt" id="pjCount"></span><button type="button" class="pri" id="projNew2"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
+      <div class="board-tools"><input id="projFilter" type="search" autocomplete="off" placeholder="Buscar por código, produto, OP ou lote…" aria-label="Buscar projeto"></div>
+      <div class="msg">Clique num projeto para abri-lo. "Juntar ao encaixe" soma as peças de outro projeto ao encaixe do projeto aberto.</div>
+    </header>
+    <div class="pgrid" id="projList"></div>
+  </section>
+  <section class="board" id="board" aria-label="Peças do projeto">
+    <header class="board-hd">
+      <div class="board-title"><h2>Peças</h2><span class="cnt" id="pcount"></span></div>
+      <div class="board-tools"><input id="partSearch" type="search" autocomplete="off" placeholder="Buscar peça…" aria-label="Buscar peça"><select id="partFilter" aria-label="Filtrar por modelo"></select><button type="button" id="pickAll">Marcar visíveis</button><button type="button" id="pickNone">Limpar marcas</button></div>
+      <div class="msg" id="pvInfo"></div>
+    </header>
+    <div class="tiles" id="parts"></div>
+    <div class="actbar" id="actbar" role="region" aria-label="Ações das peças marcadas">
+      <span id="selInfo" aria-live="polite"></span><select id="pickTarget" aria-label="Modelo de destino"></select><button type="button" class="pri" id="applyColor" disabled>Mover</button><button type="button" id="clearGroup" disabled>Tirar do modelo</button><button type="button" class="danger" id="delPicked" disabled>Excluir</button>
+    </div>
+  </section>
   <div class="stage" id="stage"><div class="empty"><b>Crie ou escolha um projeto e importe os arquivos.</b>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div></div>
 </div>
 </main>
@@ -545,14 +631,48 @@ async function linkProject(id,on){
   status(on?'Peças de '+projCode(id)+' juntadas ao encaixe. Encaixe de novo.':'Peças de '+projCode(id)+' retiradas do encaixe.',false)}
 function renderProjList(){
   const q=($('#projFilter').value||'').trim().toLowerCase(),L=S.store.projects.filter(p=>!q||[p.code,p.product,p.order,p.lot].join(' ').toLowerCase().includes(q));
-  $('#projList').innerHTML=L.map(p=>{const cur=p.id===S.projectId,lk=S.links.some(l=>l.id===p.id);
-    return `<div class="proj ${cur?'on':''} ${lk?'lk':''}"><button type="button" class="projopen" data-open="${esc(p.id)}" ${cur?'aria-current="true"':''}><b>${esc(p.code)}</b><span>${esc(p.product)}</span><span>${esc([p.order&&'OP '+p.order,p.lot&&'lote '+p.lot].filter(Boolean).join(' · '))}</span></button>${cur?'<span class="tag on">aberto</span>':`<label class="f chk"><input type="checkbox" data-link="${esc(p.id)}" ${lk?'checked':''} ${S.projectId?'':'disabled'}> Juntar ao encaixe</label>`}</div>`}).join('')||`<div class="msg">${S.store.projects.length?'Nenhum projeto com esse texto.':'Nenhum projeto ainda. Crie o primeiro.'}</div>`;
+  const dt=v=>{const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('pt-BR')};
+  // o projeto aberto vem primeiro; os outros na ordem de criação, do mais novo ao mais antigo
+  const ord=[...L].sort((a,b)=>(b.id===S.projectId)-(a.id===S.projectId)||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  $('#projList').innerHTML=ord.map((p,k)=>{const cur=p.id===S.projectId,lk=S.links.some(l=>l.id===p.id),meta=[p.order&&'OP '+p.order,p.lot&&'Lote '+p.lot].filter(Boolean).join(' · ');
+    return `<article class="pcard${cur?' on':''}${lk?' lk':''}" style="--i:${k}">
+      <button type="button" class="pcard-open" data-open="${esc(p.id)}" ${cur?'aria-current="true"':''} aria-label="Abrir projeto ${esc(p.code)}">
+        <span class="pcard-mark" aria-hidden="true">${esc(String(p.code||'?').slice(0,2).toUpperCase())}</span>
+        <span class="pcard-txt"><b>${esc(p.code)}</b><span>${esc(p.product)}</span></span></button>
+      <div class="pcard-meta">${meta?`<span>${esc(meta)}</span>`:''}${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}</div>
+      <div class="pcard-foot">${cur?'<span class="tag on">Aberto</span><span class="pcard-hint">Projeto em uso</span>':`<label class="pcard-link"><input type="checkbox" data-link="${esc(p.id)}" ${lk?'checked':''} ${S.projectId?'':'disabled'}> Juntar ao encaixe</label><span class="pcard-hint">Abrir →</span>`}<button type="button" class="icon pcard-del" data-del-proj="${esc(p.id)}" aria-label="Excluir projeto ${esc(p.code)}" title="Excluir projeto"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`}).join('')||
+    `<div class="board-empty">${S.store.projects.length?'Nenhum projeto com esse texto.':'<b>Nenhum projeto ainda.</b>Crie o primeiro para importar peças e encaixar.<button type="button" class="pri" data-new-proj>Novo projeto</button>'}</div>`;
+  $('#pjCount').textContent=S.store.projects.length?S.store.projects.length+' no total':'';
+  // resumo do projeto aberto, no painel
+  const cp=curProj(),own=S.parts.filter(x=>!x.guest),un=own.reduce((a,x)=>a+(x.on?x.qty:0),0);
+  $('#projSummary').innerHTML=cp?`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(String(cp.code||'?').slice(0,2).toUpperCase())}</span><div><b>${esc(cp.code)}</b><span>${esc(cp.product)}</span></div></div>
+      <dl class="psum-dl"><div><dt>Peças</dt><dd>${esc(own.length)}</dd></div><div><dt>Unidades</dt><dd>${esc(un)}</dd></div><div><dt>Arquivos</dt><dd>${esc(S.files.length)}</dd></div><div><dt>Modelos</dt><dd>${esc(new Set(own.map(x=>x.groupId).filter(Boolean)).size)}</dd></div>
+      ${cp.order?`<div><dt>OP</dt><dd>${esc(cp.order)}</dd></div>`:''}${cp.lot?`<div><dt>Lote</dt><dd>${esc(cp.lot)}</dd></div>`:''}${cp.createdAt?`<div><dt>Criado</dt><dd>${esc(dt(cp.createdAt))}</dd></div>`:''}</dl>
+      <div class="btns"><button type="button" data-goto="import">Importar arquivos</button><button type="button" class="pri" data-goto="pecas">Ver peças</button></div>
+      <button type="button" class="psum-del" data-del-proj="${esc(cp.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir projeto</button>
+      ${S.links.length?`<div class="psum-links"><b>Juntados ao encaixe</b>${S.links.map(l=>`<span class="tag inf">${esc(projCode(l.id))}</span>`).join('')}</div>`:''}</div>`
+    :'<div class="msg">Nenhum projeto aberto. Escolha um no quadro ou crie um novo.</div>';
   const n=S.links.length;
   $('#linkInfo').textContent=n?'Encaixe conjunto: '+[projCode(S.projectId),...S.links.map(l=>projCode(l.id))].join(' + ')+'. Chapas, exportação e relatório ficam no projeto aberto.':'';
   $('#linkTag').hidden=!n;$('#linkTag').textContent=n?'+ '+S.links.map(l=>projCode(l.id)).join(' + '):''}
 $('#projList').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b&&b.dataset.open!==S.projectId)openProject(b.dataset.open).catch(x=>toast(x.message,'bad'))});
 $('#projList').addEventListener('change',e=>{const t=e.target;if(t.dataset.link)linkProject(t.dataset.link,t.checked).catch(x=>toast(x.message,'bad'))});
 $('#projFilter').addEventListener('input',renderProjList);
+$('#projList').addEventListener('click',e=>{if(e.target.closest('[data-new-proj]'))openProjModal()});
+/* Excluir projeto: sai da lista; o arquivo fica em data/ marcado como excluído, recuperável à mão. */
+async function deleteProject(id){
+  const p=S.store.projects.find(x=>x.id===id);if(!p)return;
+  const cur=id===S.projectId,n=cur?S.parts.filter(x=>!x.guest).length:0;
+  if(!await ask('Excluir o projeto "'+p.code+' · '+p.product+'"'+(cur?' ('+n+' peça(s))':'')+'?\n\nEle sai da lista com as peças e o encaixe salvo. O arquivo fica guardado na pasta data/ marcado como excluído e pode ser recuperado depois.','Excluir projeto',true))return;
+  try{await api('/api/project/'+id+'/delete',{})}catch(e){toast(e.message,'bad');return}
+  if(S.links.some(l=>l.id===id))await linkProject(id,false);
+  S.store.projects=S.store.projects.filter(x=>x.id!==id);hist('project.delete',{id,code:p.code,product:p.product});
+  // excluindo o aberto: nada dele pode ser gravado de novo (recriaria o arquivo); abre o próximo da lista
+  if(cur){clearTimeout(saveT);S.projectId=null;S.parts=[];S.files=[];S.savedNest=null;S.links=[];sent.proj='';const nx=S.store.projects[0];await openProject(nx?nx.id:null)}
+  else{renderProj();autosave()}
+  toast('Projeto '+p.code+' excluído.','ok')}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-del-proj]');if(b)deleteProject(b.dataset.delProj).catch(x=>toast(x.message,'bad'))});
+$('#projSummary').addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)showView(b.dataset.goto)});
 $('#projNew2').onclick=openProjModal;
 function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';showModal('projModal','#pjCode')}
 $('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>hideModal('projModal');
@@ -1035,12 +1155,30 @@ function setCount(id,v){
   S.res=null;S.snap=null;S.pdf=null;render();
   toast(odd?odd+' peça(s) não tinham quantidade múltipla de '+n+': valor arredondado, confira.':m+' × '+s.name+': quantidades das peças atualizadas.',odd?'bad':'ok');
 }
-function updateColorButtons(){const n=picked().length;$('#applyColor').disabled=!n;$('#clearGroup').disabled=!n;$('#delPicked').disabled=!n;$('#delPicked').textContent=n?'Excluir marcadas ('+n+')':'Excluir marcadas';$('#selInfo').textContent=n?n+' peça(s) marcada(s).':'Marque peças na lista para colocá-las em um modelo.'}
+/* Filtro da lista de peças: só a vista, não muda dados. */
+const PV={q:'',f:'',open:new Set(),mopen:new Set()};
+const partVisible=p=>(!PV.f||(PV.f==='__pend'?!p.groupId:p.groupId===PV.f))&&(!PV.q||String(p.name).toLowerCase().includes(PV.q));
+$('#partSearch').addEventListener('input',e=>{PV.q=e.target.value.trim().toLowerCase();renderCore()});
+$('#partFilter').addEventListener('change',e=>{PV.f=e.target.value;renderCore()});
+function updateColorButtons(){const n=picked().length;$('#applyColor').disabled=!n;$('#clearGroup').disabled=!n;$('#delPicked').disabled=!n;$('#delPicked').textContent=n?'Excluir ('+n+')':'Excluir';
+  $('#actbar').classList.toggle('on',!!n);$('#selInfo').textContent=n+' marcada(s)'}
+/* Quadro: clicar no desenho marca; − e + mudam a quantidade; o que está aberto em "Mais opções" sobrevive ao redesenho. */
+$('#parts').addEventListener('click',e=>{
+  const st=e.target.closest('[data-step]');
+  if(st){const q=st.closest('.part').querySelector('[data-f=qty]');q.value=Math.max(1,(+q.value||1)+(+st.dataset.step));q.dispatchEvent(new Event('input',{bubbles:true}));q.dispatchEvent(new Event('change',{bubbles:true}));return}
+  if(e.target.closest('[data-go-import]')){showView('import');return}
+  const art=e.target.closest('.tile-art');
+  if(art&&!e.target.closest('.tile-check')){const cb=art.querySelector('[data-f=pick]');if(cb.disabled)return;cb.checked=!cb.checked;cb.dispatchEvent(new Event('input',{bubbles:true}))}});
+$('#parts').addEventListener('toggle',e=>{const d=e.target;if(!d.matches||!d.matches('.tile-more'))return;d.open?PV.open.add(d.dataset.more):PV.open.delete(d.dataset.more)},true);
+$('#legend').addEventListener('click',e=>{
+  const m=e.target.closest('[data-mf]');if(m){PV.f=m.dataset.mf;renderCore();return}
+  const ed=e.target.closest('[data-medit]');if(ed){const id=ed.dataset.medit;PV.mopen.has(id)?PV.mopen.delete(id):PV.mopen.add(id);renderLegend()}});
 $('#applyColor').onclick=async()=>{
   const parts=picked();if(!parts.length){toast('Marque ao menos uma peça.','bad');return}
-  const name=$('#setName').value.trim();
-  if(!name){toast('Dê um nome ao modelo para receber as peças marcadas.','bad');$('#setName').focus();return}
-  let st=S.sets.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  // destino escolhido na barra; sem escolha, vale o nome digitado em "Novo modelo" (cria se não existir)
+  const name=$('#setName').value.trim();let st=S.sets.find(x=>x.id===$('#pickTarget').value);
+  if(!st&&!name){toast('Escolha o modelo em "Mover para…".','bad');$('#pickTarget').focus();return}
+  st=st||S.sets.find(x=>x.name.toLowerCase()===name.toLowerCase());
   if(!st){st={id:nid('c'),name,color:nextColor(),isolate:false,together:false};S.sets.push(st)}
   for(const p of parts)moveToSet(p,st.id);toast('Peças no modelo '+st.name+'.','ok');
   if(rulesActive()){S.res=null;S.snap=null;S.pdf=null}
@@ -1060,7 +1198,7 @@ $('#clearGroup').onclick=()=>{
   if(rulesActive()){S.res=null;S.snap=null;S.pdf=null}
   render();toast('Peças fora do conjunto.','ok');
 };
-$('#pickAll').onclick=()=>{S.parts.forEach(p=>{p.pick=!p.guest});render()};
+$('#pickAll').onclick=()=>{S.parts.forEach(p=>{if(!p.guest&&partVisible(p))p.pick=true});render()};
 $('#pickNone').onclick=()=>{S.parts.forEach(p=>{p.pick=false});render()};
 $('#mix').addEventListener('change',()=>{S.res=null;S.snap=null;S.pdf=null;render();status($('#mix').checked?'Cores diferentes podem compartilhar a chapa. Encaixe de novo.':'Cada conjunto vai para chapas separadas. Encaixe de novo.',false)});
 /* Exclui peças do projeto aberto; arquivo de origem que ficar sem peça sai junto, para poder ser reimportado. */
@@ -1139,11 +1277,21 @@ function ruleHintText(){
   return bits.join(' ');
 }
 function renderLegend(){
-  $('#legend').innerHTML=S.sets.map(s=>{
-    const parts=S.parts.filter(p=>p.groupId===s.id);
-    const q=parts.reduce((a,p)=>a+(p.on?p.qty:0),0);
-    return `<div class="setcard"><div class="top"><input type="color" value="${esc(s.color)}" data-set="${esc(s.id)}" data-set-f="color" aria-label="Cor de ${esc(s.name)}"><input type="text" value="${esc(s.name)}" data-set="${esc(s.id)}" data-set-f="name" aria-label="Nome do conjunto" maxlength="60"></div><label class="f">Quantidade de modelos<input type="number" min="1" step="1" value="${esc(setN(s.id))}" data-set="${esc(s.id)}" data-set-f="count" aria-label="Quantidade de modelos ${esc(s.name)}"></label><div class="m">${esc(q)} un · ${parts.length?esc(parts.map(p=>p.name+' ×'+p.qty).join(', ')):'nenhuma peça neste projeto'}</div><div class="btns"><button type="button" data-del-set-parts="${esc(s.id)}" ${parts.length?'':'disabled'}>Excluir peças</button><button type="button" data-del-set="${esc(s.id)}" aria-label="Excluir modelo ${esc(s.name)}">Excluir modelo</button></div><div class="flags"><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="isolate" ${s.isolate?'checked':''}> Fabricar em chapas separadas</label><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="together" ${s.together?'checked':''}> Manter na mesma chapa</label></div></div>`;
-  }).join('')||'<div class="msg">Nenhum modelo criado. Dê um nome e clique em Criar modelo.</div>';
+  const n=f=>S.parts.filter(p=>f==='__pend'?!p.groupId:p.groupId===f).length;
+  const row=(f,dot,name,num,extra='')=>`<button type="button" class="mrow${PV.f===f?' on':''}" data-mf="${esc(f)}"${extra}>${dot}<span class="mname">${esc(name)}</span><span class="mnum">${esc(num)}</span></button>`;
+  $('#legend').innerHTML=row('','<span class="mdot all"></span>','Todas as peças',S.parts.length)+row('__pend','<span class="mdot pend"></span>','Sem modelo',n('__pend'))+
+    S.sets.map(s=>{const parts=S.parts.filter(p=>p.groupId===s.id),q=parts.reduce((a,p)=>a+(p.on?p.qty:0),0),open=PV.mopen.has(s.id);
+      return `<div class="mitem${PV.f===s.id?' on':''}"><div class="mhead">${row(s.id,`<span class="mdot" style="background:${esc(s.color)}"></span>`,s.name,parts.length)}
+        <button type="button" class="icon medit" data-medit="${esc(s.id)}" aria-expanded="${open}" aria-label="Editar modelo ${esc(s.name)}" title="Editar modelo"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button></div>
+        ${open?`<div class="mbody setcard"><div class="top"><input type="color" value="${esc(s.color)}" data-set="${esc(s.id)}" data-set-f="color" aria-label="Cor de ${esc(s.name)}"><input type="text" value="${esc(s.name)}" data-set="${esc(s.id)}" data-set-f="name" aria-label="Nome do modelo" maxlength="60"></div>
+          <div class="setstats"><span><b>${esc(q)}</b> un no encaixe</span><label class="setn">× <input type="number" min="1" step="1" value="${esc(setN(s.id))}" data-set="${esc(s.id)}" data-set-f="count" aria-label="Quantidade de modelos ${esc(s.name)}"> modelo(s)</label></div>
+          <div class="flags"><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="isolate" ${s.isolate?'checked':''}> Chapas só deste modelo</label><label><input type="checkbox" data-set="${esc(s.id)}" data-set-f="together" ${s.together?'checked':''}> Tudo na mesma chapa</label></div>
+          <div class="btns"><button type="button" data-del-set-parts="${esc(s.id)}" ${parts.length?'':'disabled'}>Excluir peças</button><button type="button" class="danger" data-del-set="${esc(s.id)}" aria-label="Excluir modelo ${esc(s.name)}">Excluir modelo</button></div></div>`:''}</div>`}).join('')+
+    (S.sets.length?'':'<div class="msg">Nenhum modelo ainda. Digite um nome acima e clique em Criar.</div>');
+  // listas que dependem dos modelos: filtro do quadro e destino da barra de ações
+  const mopts=S.sets.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  $('#partFilter').innerHTML='<option value="">Todas as peças</option><option value="__pend">Sem modelo</option>'+mopts;$('#partFilter').value=S.sets.some(s=>s.id===PV.f)||PV.f==='__pend'?PV.f:(PV.f='');
+  const tg=$('#pickTarget').value;$('#pickTarget').innerHTML='<option value="">Mover para…</option>'+mopts;$('#pickTarget').value=S.sets.some(s=>s.id===tg)?tg:'';
   const opts=S.sets.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   $('#fa').innerHTML=opts;$('#fb').innerHTML=opts;$('#forbidAdd').disabled=S.sets.length<2;
   $('#forbids').innerHTML=S.forbid.map((p,i)=>{const A=S.sets.find(s=>s.id===p[0]),B=S.sets.find(s=>s.id===p[1]);if(!A||!B)return '';return `<div class="pair"><span><i class="sw" style="background:${esc(A.color)}"></i>${esc(A.name)} × <i class="sw" style="background:${esc(B.color)}"></i>${esc(B.name)}</span><button type="button" data-unforbid="${i}">Tirar</button></div>`}).join('');
@@ -1159,23 +1307,33 @@ function render(){renderCore();autosave()}
 function renderCore(){
   $('#go').disabled=NEST.busy||!S.parts.some(p=>p.on);
   /* a lista é refeita por innerHTML: guarda o campo com foco e a rolagem para devolver depois */
-  const fa=document.activeElement,fp=fa&&fa.closest&&fa.closest('#parts .part'),fk=fp&&fa.dataset.f?[fp.dataset.i,fa.dataset.f]:null,pst=$('#panel').scrollTop;
+  const fa=document.activeElement,fp=fa&&fa.closest&&fa.closest('#parts .part'),fk=fp&&fa.dataset.f?[fp.dataset.i,fa.dataset.f]:null,pst=$('#panel').scrollTop,mst=$('.mid').scrollTop;
   $('#pcount').textContent=S.parts.length?`${S.parts.reduce((s,p)=>s+(p.on?p.qty:0),0)} un · ${S.parts.length} únicas`:'';
-  $('#parts').innerHTML=S.parts.map((p,i)=>{const col=partColor(p),ro=p.guest?' disabled':'';return `<div class="part ${p.on?'':'off'} ${p.pick?'pick':''} ${p.groupId?'':'pend'} ${p.guest?'guest':''}" data-i="${i}">
-   <input type="checkbox" data-f="on" ${p.on?'checked':''}${ro} title="Usar no encaixe" aria-label="Usar ${esc(p.name)} no encaixe">
-   <svg viewBox="-2 ${esc(-p.h-2)} ${esc(p.w+4)} ${esc(p.h+4)}"><path d="${path(p.rings)}" fill="${col}" fill-opacity=".85" fill-rule="evenodd"/></svg>
-   <div><div class="n"><i class="sw" style="background:${col}"></i>${esc(p.name)}${p.guest?'<span class="tag inf" title="Peça de outro projeto, juntada só para o encaixe">'+esc(projCode(p.guest))+'</span>':''}${p.groupId?'':'<span class="tag pend">sem modelo</span>'}${p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':''}</div><div class="m" title="${esc(fileName(p.fileId))}">${esc(p.w.toFixed(0))}×${esc(p.h.toFixed(0))} mm${p.holes?` · ${esc(p.holes)} furo${p.holes>1?'s':''}`:''}${p.groupId?' · '+esc(setNameOf(p.groupId)):''}${p.fileId?' · '+esc(fileName(p.fileId)):''}</div></div>
-   <div class="c"><input type="number" min="1" value="${esc(p.qty)}" data-f="qty"${ro} title="Quantidade" aria-label="Quantidade de ${esc(p.name)}">
-    <input value="${esc(p.mat)}" data-f="mat"${ro} list="mats" title="Material" aria-label="Material de ${esc(p.name)}"><input type="number" step=".1" value="${esc(p.th)}" data-f="th"${ro} title="Espessura (mm)" aria-label="Espessura de ${esc(p.name)}"></div>
-   <div class="c2"><label><input type="checkbox" data-f="pick" ${p.pick?'checked':''}${ro}>marcar</label>
-    <select data-f="groupId"${ro} aria-label="Conjunto de ${esc(p.name)}"><option value="">Sem modelo (pendente)</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${p.groupId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
-   <div class="c2">Giro <select data-f="rot"${ro} aria-label="Giro de ${esc(p.name)}">${[['auto','Padrão (global)'],['free','Livre 360°'],['90','90°'],['180','180° (veio)'],['0','Fixo (veio)']].map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select><label><input type="checkbox" data-f="mirror" ${p.mirror?'checked':''}${ro}>espelhar</label><button type="button" data-del-part${ro} aria-label="Excluir ${esc(p.name)}">Excluir</button></div></div>`}).join('');
-  if(fk){const el=$(`#parts .part[data-i="${fk[0]}"] [data-f="${fk[1]}"]`);if(el&&!el.disabled)el.focus({preventScroll:true})}$('#panel').scrollTop=pst;
+  let shown=0;const ROT=[['auto','Giro padrão'],['free','Giro livre 360°'],['90','Giro 90°'],['180','Giro 180° (veio)'],['0','Fixo (veio)']];
+  $('#parts').innerHTML=S.parts.map((p,i)=>{if(!partVisible(p))return '';shown++;const col=partColor(p),ro=p.guest?' disabled':'',open=PV.open.has(String(p.id));
+   const tags=(p.groupId?'':'<span class="tag pend">sem modelo</span>')+(p.guest?'<span class="tag inf" title="Peça de outro projeto, juntada só para o encaixe">'+esc(projCode(p.guest))+'</span>':'')+(p.thSrc&&p.thSrc!=='manual'?'<span class="tag inf" title="Espessura não lida do arquivo">esp. '+esc(p.thSrc)+'</span>':'');
+   return `<article class="part tile${p.on?'':' off'}${p.pick?' pick':''}${p.groupId?'':' pend'}${p.guest?' guest':''}" data-i="${i}" style="--c:${col};--i:${shown}">
+   <div class="tile-art" title="Clique para marcar"><svg viewBox="-2 ${esc(-p.h-2)} ${esc(p.w+4)} ${esc(p.h+4)}" aria-hidden="true"><path d="${path(p.rings)}" fill="${col}" fill-opacity=".9" fill-rule="evenodd"/></svg>
+    <label class="tile-check"><input type="checkbox" data-f="pick" ${p.pick?'checked':''}${ro} aria-label="Marcar ${esc(p.name)}"></label>${p.on?'':'<span class="tile-flag">fora do encaixe</span>'}</div>
+   <div class="tile-body">
+    <div class="tile-name" title="${esc(p.name)}">${esc(p.name)}</div>
+    <div class="tile-meta" title="${esc(fileName(p.fileId))}">${esc(p.w.toFixed(0))}×${esc(p.h.toFixed(0))} mm${p.holes?` · ${esc(p.holes)} furo${p.holes>1?'s':''}`:''} · ${esc(p.mat)} ${esc(p.th)} mm</div>
+    ${tags?`<div class="tile-tags">${tags}</div>`:''}
+    <div class="tile-ctl"><select class="tile-model" data-f="groupId"${ro} aria-label="Modelo de ${esc(p.name)}"><option value="">Sem modelo</option>${S.sets.map(s=>`<option value="${esc(s.id)}" ${p.groupId===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+     <div class="stepper"><button type="button" data-step="-1"${ro} aria-label="Diminuir quantidade de ${esc(p.name)}">−</button><input type="number" min="1" value="${esc(p.qty)}" data-f="qty"${ro} aria-label="Quantidade de ${esc(p.name)}"><button type="button" data-step="1"${ro} aria-label="Aumentar quantidade de ${esc(p.name)}">+</button></div></div>
+    <details class="tile-more" data-more="${esc(p.id)}"${open?' open':''}><summary>Mais opções</summary><div class="tile-more-in">
+     <div class="tile-grid"><label class="f">Material<input value="${esc(p.mat)}" data-f="mat"${ro} list="mats" aria-label="Material de ${esc(p.name)}"></label><label class="f">Esp. (mm)<input type="number" step=".1" value="${esc(p.th)}" data-f="th"${ro} aria-label="Espessura de ${esc(p.name)}"></label></div>
+     <div class="tile-opts"><label><input type="checkbox" data-f="on" ${p.on?'checked':''}${ro}> No encaixe</label><select data-f="rot"${ro} aria-label="Giro de ${esc(p.name)}">${ROT.map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select><label><input type="checkbox" data-f="mirror" ${p.mirror?'checked':''}${ro}> Espelhar</label></div>
+     <button type="button" class="tile-del" data-del-part${ro}><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir peça</button></div></details>
+   </div></article>`}).join('')||`<div class="board-empty">${S.parts.length?'Nenhuma peça com esse filtro.':'<b>Nenhuma peça neste projeto.</b>Importe arquivos DXF, DWG ou SVG para começar.<button type="button" class="pri" data-go-import>Importar arquivos</button>'}</div>`;
+  const fl=PV.f==='__pend'?'Sem modelo':(S.sets.find(s=>s.id===PV.f)||{}).name;
+  $('#pvInfo').textContent=S.parts.length&&(PV.q||PV.f)?'Mostrando '+shown+' de '+S.parts.length+' peças'+(fl?' · '+fl:'')+(PV.q?' · busca "'+PV.q+'"':''):'';
+  if(fk){const el=$(`#parts .part[data-i="${fk[0]}"] [data-f="${fk[1]}"]`);if(el&&!el.disabled)el.focus({preventScroll:true})}$('#panel').scrollTop=pst;$('.mid').scrollTop=mst;
   const G=groupsOf();
   Object.keys(G).forEach(k=>{if(!S.groups[k]){const mem=S.sheetMemory&&S.sheetMemory[k];if(mem&&+mem.w>0&&+mem.h>0)S.groups[k]={w:+mem.w,h:+mem.h};else{const t=+k.split('· ')[1].replace(' mm','');const mdf=/mdf|mdp|compens/i.test(k);S.groups[k]=mdf?{w:2750,h:1840}:{w:3000,h:t>=6?1500:1250}}}});
   $('#groups').innerHTML=Object.keys(G).map(k=>{const g=S.groups[k],q=G[k].reduce((s,p)=>s+p.qty,0),a=G[k].reduce((s,p)=>s+p.A*p.qty,0)/1e6;
    return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset>${sheetOptions(k,g)}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${esc(g.w)}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${esc(g.h)}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
-  renderLegend();updateColorButtons();
+  renderLegend();updateColorButtons();renderProjList();
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
   const ready=!!(R&&S.snap);$('#xLock').hidden=ready;patPreview();
@@ -1649,6 +1807,8 @@ function patPreview(){const p=curProj(),k=S.tab||Object.keys(S.groups)[0]||'Mate
 /* ---------- interface: navegação, painel e zoom (só aparência; não toca em dados nem no encaixe) ---------- */
 const mainEl=$('main'),appEl=$('#app');
 function showView(v,toggle){
+  const bd=v==='projetos'?$('#pboard'):v==='pecas'?$('#board'):null;
+  if(bd&&mainEl.dataset.view!==v){bd.classList.add('enter');clearTimeout(bd._t);bd._t=setTimeout(()=>bd.classList.remove('enter'),900)}
   if(v==='presets')prefillPreset();
   const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
   mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
@@ -1657,6 +1817,7 @@ function showView(v,toggle){
   document.querySelectorAll('.nav[data-view]').forEach(b=>{const on=open&&b.dataset.view===v;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
   $('#panelToggle').setAttribute('aria-expanded',open)}
 $('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(b)showView(b.dataset.view,true)});
+$('#go').addEventListener('click',()=>{if(['pecas','projetos'].includes(mainEl.dataset.view))showView('encaixe')},true);
 $('#panelToggle').onclick=()=>showView(mainEl.dataset.view,true);
 $('#railToggle').onclick=()=>{const wide=$('.rail').offsetWidth>100;appEl.classList.toggle('rail-min',wide);appEl.classList.toggle('rail-max',!wide);
   $('#railToggle').querySelector('span').textContent=wide?'Expandir menu':'Recolher menu'};

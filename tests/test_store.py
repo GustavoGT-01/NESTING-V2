@@ -143,6 +143,17 @@ class StoreTests(unittest.TestCase):
         self.assertFalse(list(self.d.glob("*.tmp")))
         self.assertEqual(store.load()["models"], [{"id": "z"}])
 
+    def test_delete_project_keeps_file_aside(self):
+        store.save_project("pA", {"parts": [{"id": 1}], "files": []})
+        name = store.delete_project("pA")
+        self.assertTrue(name.startswith("project_pA.json.excluido-"))
+        self.assertTrue((self.d / name).exists())                 # recuperável
+        self.assertFalse((self.d / "project_pA.json").exists())
+        self.assertEqual(store.load_project("pA")["parts"], [])   # some da leitura
+        self.assertEqual(store.delete_project("pA"), "")          # de novo: nada a fazer
+        with self.assertRaises(store.BadId):
+            store.delete_project("../x")
+
     def test_snapshot_daily_and_prunes(self):
         store.save({"models": [{"id": "m"}]}, 0)
         root = self.d / "backups"

@@ -202,11 +202,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if not self._host_ok():
-            return
-        origin = self.headers.get("Origin")
-        if origin is not None and origin not in {"http://" + h for h in self._local()}:
-            return self._fail(403, "Origem não aceita.")  # outro site postando no servidor local
         try:
             length = int(self.headers.get("Content-Length"))
         except (TypeError, ValueError):
@@ -215,8 +210,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self._fail(400, "Content-Length ausente ou inválido.")
         if length > MAX_BODY:
             return self._fail(413, "Arquivo grande demais.")
-        path = self.path.split("?", 1)[0]
+        # o corpo é lido antes de qualquer recusa: fechar a conexão com dados por ler vira RST no Windows
+        # e o cliente vê "conexão abortada" em vez da resposta
         data = self.rfile.read(length) if length else b""
+        if not self._host_ok():
+            return
+        origin = self.headers.get("Origin")
+        if origin is not None and origin not in {"http://" + h for h in self._local()}:
+            return self._fail(403, "Origem não aceita.")  # outro site postando no servidor local
+        path = self.path.split("?", 1)[0]
         if path == "/api/dwg":
             name = self.headers.get("X-Filename", "peca.dwg")
             try:
@@ -257,6 +259,12 @@ class Handler(SimpleHTTPRequestHandler):
                 self._fail(409, str(exc))
             except Exception as exc:
                 self._fail(400, "Falha ao gravar: %s" % exc)
+            return
+        elif path.startswith("/api/project/") and path.endswith("/delete"):
+            try:
+                self._json({"ok": True, "file": store.delete_project(path.split("/")[3])})
+            except Exception as exc:
+                self._fail(400, "Falha ao excluir o projeto: %s" % exc)
             return
         elif path.startswith("/api/project/"):
             try:

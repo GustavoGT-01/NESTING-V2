@@ -171,6 +171,19 @@ def load_project(pid: str) -> dict:
         return doc
 
 
+def delete_project(pid: str) -> str:
+    """Tira o projeto de uso sem apagar: o arquivo vira project_<id>.json.excluido-<hora>, que nada lê
+    nem serve, e pode ser renomeado de volta para recuperar. Devolve o nome novo ('' se não havia arquivo)."""
+    check_id(pid)
+    with LOCK:
+        path = data_dir() / ("project_%s.json" % pid)
+        if not path.exists():
+            return ""
+        dest = path.with_name("%s.excluido-%d" % (path.name, int(time.time())))
+        _replace(path, dest)
+        return dest.name
+
+
 def save_project(pid: str, payload: dict) -> int:
     """Grava o projeto e devolve a nova revisão. Sem "rev" no payload, grava sem conferir (compatível)."""
     check_id(pid)
