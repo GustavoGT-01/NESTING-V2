@@ -505,7 +505,8 @@ function hideModal(id){const m=$('#'+id);if(m.hidden)return;m.hidden=true;const 
 let toastT=0,asking=false;
 function toast(text,kind,undo){const el=$('#toast');if(!text){el.hidden=true;return}el.textContent=text;
   if(undo){const b=document.createElement('button');b.type='button';b.textContent='Desfazer';b.style.marginLeft='10px';b.onclick=()=>{el.hidden=true;undo()};el.appendChild(b)}
-  el.className='toast '+(kind||'');el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},undo?10000:3600)}
+  el.className='toast '+(kind||'');el.hidden=false;el.style.animation='none';void el.offsetWidth;el.style.animation='';
+  clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},undo?10000:3600)}
 function ask(text,yesLabel,danger){
   if(asking) return Promise.resolve(false);
   asking=true;
@@ -852,16 +853,20 @@ function renderCore(){
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
   const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
   $('#nestInfo').className='msg'+(old?' w':'');$('#nestInfo').textContent=sv?'Encaixe salvo em '+whenLabel(sv.savedAt)+' · '+sv.sheets+' chapa(s).'+(old?' As peças ou chapas mudaram desde então: ele não pode mais ser aberto.':''):'Nenhum encaixe salvo neste projeto.';
-  if(!R){$('#kpi').textContent=S.parts.length?'pronto para encaixar':'sem peças';if(!S.parts.length)$('#stage').innerHTML='<div class="empty"><b>Importe um arquivo para começar.</b>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div>';else $('#stage').innerHTML='<div class="empty"><b>Peças prontas para encaixar.</b>Ajuste material, espessura e quantidade e clique em Encaixar.</div>';return}
+  if(!R){$('#kpi').textContent=S.parts.length?'pronto para encaixar':'sem peças';const stage=$('#stage');stage.classList.remove('sheets-in');stage.dataset.sheetSig='';stage.dataset.sheetDone='';if(!S.parts.length)stage.innerHTML='<div class="empty"><b>Importe um arquivo para começar.</b>Cada contorno fechado vira uma peça; furos internos são reconhecidos.</div>';else stage.innerHTML='<div class="empty"><b>Peças prontas para encaixar.</b>Ajuste material, espessura e quantidade e clique em Encaixar.</div>';return}
   const gr=R[S.tab],g=S.groups[S.tab];let tot=0,ar=0,ns=0;Object.keys(R).forEach(k=>{ns+=R[k].sheets.length;const gg=S.groups[k];ar+=R[k].sheets.length*gg.w*gg.h;tot+=used(R[k])});
   $('#kpi').innerHTML=ns?`<b>${ns}</b> chapa${ns>1?'s':''} · aproveitamento <b>${(tot/ar*100).toFixed(1)}%</b>`:`<b>0</b> chapas · nada encaixado`;
   const nJunto=(gr.failWhy||[]).filter(w=>w==='junto').length,nSize=(gr.fail||[]).length-nJunto;
   let warn='';
   if(nSize) warn+=`${nSize} peça(s) não cabem na chapa de ${g.w}×${g.h} mm.`;
   if(nJunto) warn+=(warn?' ':'')+`${nJunto} peça(s) não couberam na mesma chapa do conjunto.`;
-  $('#stage').innerHTML=(warn?`<div class="msg w" style="margin-bottom:8px">${esc(warn)}</div>`:'')+legendBar()+gr.sheets.map((sh,si)=>{
+  const stage=$('#stage'),sig=(S.tab||'')+':'+gr.sheets.map(sh=>sh.placed.length).join(','),done=S.snap?'1':'';
+  const play=stage.dataset.sheetSig!==sig||(done==='1'&&stage.dataset.sheetDone!=='1');
+  stage.dataset.sheetSig=sig;stage.dataset.sheetDone=done;stage.classList.remove('sheets-in');
+  stage.innerHTML=(warn?`<div class="msg w" style="margin-bottom:8px">${esc(warn)}</div>`:'')+legendBar()+gr.sheets.map((sh,si)=>{
     const u=sh.placed.reduce((s,p)=>s+p.it.A,0)/(g.w*g.h)*100;
-    return`<div class="sheetbox"><div class="hd"><b>Chapa ${si+1}</b><span>${esc(g.w)}×${esc(g.h)} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${esc(gr.ext[si])} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div><div class="cv">${sheetSVG(sh,g)}</div></div>`}).join('')}
+    return`<div class="sheetbox" style="--i:${Math.min(si,8)}"><div class="hd"><b>Chapa ${si+1}</b><span>${esc(g.w)}×${esc(g.h)} mm</span><span>${sh.placed.length} ${sh.placed.length===1?'peça':'peças'}</span>${gr.ext&&gr.ext[si]!=null?`<span>usado ${esc(gr.ext[si])} mm</span>`:''}<span class="bar"><i style="width:${Math.max(0,Math.min(100,u))}%"></i></span><b>${u.toFixed(1)}%</b></div><div class="cv">${sheetSVG(sh,g)}</div></div>`}).join('');
+  if(play){void stage.offsetWidth;stage.classList.add('sheets-in')}}
 function sheetSVG(sh,g,plain){
   const body=sh.placed.map(p=>{
     const col=partColor(p.it);
@@ -1317,16 +1322,20 @@ function patPreview(){const p=curProj(),k=S.tab||Object.keys(S.groups)[0]||'Mate
 
 /* ---------- interface: navegação, painel e zoom (só aparência; não toca em dados nem no encaixe) ---------- */
 const mainEl=$('main'),appEl=$('#app');
+function kickView(){mainEl.classList.remove('view-in');void mainEl.offsetWidth;mainEl.classList.add('view-in');clearTimeout(mainEl._vin);mainEl._vin=setTimeout(()=>mainEl.classList.remove('view-in'),280)}
 function showView(v,toggle){
+  const changed=mainEl.dataset.view!==v;
   const bd=v==='projetos'?$('#pboard'):v==='pecas'?$('#board'):null;
-  if(bd&&mainEl.dataset.view!==v){bd.classList.add('enter');clearTimeout(bd._t);bd._t=setTimeout(()=>bd.classList.remove('enter'),900)}
+  if(bd&&changed){bd.classList.add('enter');clearTimeout(bd._t);bd._t=setTimeout(()=>bd.classList.remove('enter'),900)}
   if(v==='presets')prefillPreset();
   const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
   mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
   const open=!mainEl.classList.contains('nopanel');
   document.querySelectorAll('.sec[data-view]').forEach(el=>{el.hidden=el.dataset.view!==v});
   document.querySelectorAll('.nav[data-view]').forEach(b=>{const on=open&&b.dataset.view===v;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
-  $('#panelToggle').setAttribute('aria-expanded',open)}
+  $('#panelToggle').setAttribute('aria-expanded',open);
+  if(changed)kickView()}
+kickView();
 $('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(b)showView(b.dataset.view,true)});
 $('#go').addEventListener('click',()=>{if(['pecas','projetos'].includes(mainEl.dataset.view))showView('encaixe')},true);
 $('#panelToggle').onclick=()=>showView(mainEl.dataset.view,true);

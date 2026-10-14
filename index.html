@@ -49,7 +49,7 @@ body{background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans);font-varian
 main{display:grid;grid-template-columns:minmax(0,1fr) var(--panel);min-height:0}main.nopanel{grid-template-columns:minmax(0,1fr)}
 .panel,.mid{min-height:0;overflow:auto}.mid{min-width:0;scroll-margin-top:64px;display:flex;flex-direction:column}
 .panel{order:2;background:var(--bg2);border-left:1px solid var(--ln);box-shadow:-12px 0 24px -16px rgba(0,0,0,.5);padding:var(--s4);display:flex;flex-direction:column;gap:var(--s5)}main.nopanel .panel{display:none}
-.sec{display:flex;flex-direction:column;gap:var(--s3);min-width:0;flex:0 0 auto;animation:in .22s var(--ease)}
+.sec{display:flex;flex-direction:column;gap:var(--s3);min-width:0;flex:0 0 auto}
 .sh{display:flex;align-items:center;gap:var(--s2);min-height:28px}.sh .ic{color:var(--ac)}
 .sh h2{font-size:16px;font-weight:650;letter-spacing:-.01em}
 .sec .body{display:flex;flex-direction:column;gap:var(--s3)}
@@ -194,7 +194,7 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .psum-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.psum-links b{width:100%;font-size:13px}.psum-links .tag{margin:0}
 /* ---------- quadro de peças (área central) ---------- */
 .board{display:none;flex-direction:column;gap:var(--s4);padding:var(--s5);flex:1}
-main[data-view="pecas"] #board,main[data-view="projetos"] #pboard{display:flex;animation:fade .25s var(--ease)}
+main[data-view="pecas"] #board,main[data-view="projetos"] #pboard{display:flex}
 main[data-view="pecas"] .viewbar,main[data-view="pecas"] #stage,main[data-view="projetos"] .viewbar,main[data-view="projetos"] #stage{display:none}
 .board.enter .tile,.board.enter .pcard{animation:in .36s var(--ease) both;animation-delay:calc(min(var(--i),14) * 28ms)}
 .board-hd{display:flex;flex-direction:column;gap:12px}
@@ -282,6 +282,11 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
 .modal{padding:8px}.modal .box{padding:var(--s4);max-height:94vh;max-height:94dvh}
 .toast{left:8px;right:8px;bottom:72px;transform:none;max-width:none;animation-name:fade}
 .imp-fields{grid-template-columns:1fr}.imp-hd{flex-wrap:wrap}.imp-st{max-width:none;justify-content:flex-start}}
+/* Troca de tela: painel e área central. Chapas só com .sheets-in. Vazio só nessa troca. */
+main.view-in .sec:not([hidden]),main.view-in .stage,main.view-in .viewbar{animation:in .22s var(--ease)}
+main.view-in[data-view="pecas"] #board,main.view-in[data-view="projetos"] #pboard{animation:in .22s var(--ease)}
+.stage.sheets-in .sheetbox{animation:in .32s var(--ease) both;animation-delay:calc(var(--i,0) * 40ms)}
+main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
