@@ -19,6 +19,7 @@ orientação de peça: como a chapa só enche, a busca seguinte parte dali.
 from __future__ import annotations
 
 import math
+import os
 import random
 import time
 
@@ -340,7 +341,25 @@ def radii(gap, cs):
     return {"r": total // 2, "rb": total - total // 2}
 
 
-def pack(order, g, opt, cache):
+def _due(halt):
+    """Prazo global ou arquivo de parada. Não olha o orçamento de uma etapa."""
+    if not halt:
+        return False
+    t = halt.get("t")
+    if t is not None and time.time() >= t:
+        return True
+    path = halt.get("stop")
+    return bool(path and os.path.exists(path))
+
+
+def _cut(halt):
+    if _due(halt):
+        halt["cut"] = True
+        return True
+    return False
+
+
+def pack(order, g, opt, cache, halt=None):
     cs, r = opt["cs"], opt["r"]
     rb = opt.get("rb", r)
     W = int((g["w"] - 2 * opt["mar"]) // cs)
@@ -354,7 +373,15 @@ def pack(order, g, opt, cache):
     # "x": menor avanço no comprimento (clássico). "box": menor retângulo ocupado,
     # que deita peças longas e finas e as empilha em vez de incliná-las.
     box = opt.get("crit") == "box"
-    for it in order:
+    for idx, it in enumerate(order):
+        if _cut(halt):
+            # tentativa cortada no meio: o que já está na chapa fica; o resto não entra
+            for rest in order[idx:]:
+                fail.append(rest["uid"])
+                why.append("prazo")
+            if sheets and not sheets[-1].placed:
+                sheets.pop()
+            return sheets, fail, why
         gid = str(it.get("gid") or "")
         angs, gene = it["angs"], it.get("gene", 0)
         placed = False
@@ -437,10 +464,12 @@ def score(res):
     return (len(fail), len(sheets), last)
 
 
-def _search(items, g, opt, seconds, rnd, seeds=None, known=None, cache=None):
+def _search(items, g, opt, seconds, rnd, seeds=None, known=None, cache=None, halt=None):
     """Busca local sobre ordem + gene de diversificação. Devolve (ordem, resultado, score)."""
     cache = {} if cache is None else cache
     deadline = time.time() + seconds
+    if halt and halt.get("t") is not None:
+        deadline = min(deadline, halt["t"])
     box = lambda i: (max(p[0] for r in i["rings"] for p in r), max(p[1] for r in i["rings"] for p in r))
     starts = seeds or [
         sorted(items, key=lambda i: -i["area"]),
@@ -449,14 +478,22 @@ def _search(items, g, opt, seconds, rnd, seeds=None, known=None, cache=None):
     ]
     best = known
     for o in ([] if known else starts):
-        res = pack(o, g, opt, cache)
+        if time.time() > deadline or _due(halt):
+            break
+        if halt:
+            halt["cut"] = False
+        res = pack(o, g, opt, cache, halt)
+        if halt and halt.get("cut"):
+            if best is None:
+                best = (o, res, score(res))  # primeira tentativa não fechou: fica o parcial
+            break
         sc = score(res)
         if best is None or sc < best[2]:
             best = (o, res, sc)
         if time.time() > deadline:
             break
     iters = 0
-    while time.time() < deadline and len(best[0]) > 1:
+    while best is not None and time.time() < deadline and not _due(halt) and len(best[0]) > 1:
         o = [dict(x) for x in best[0]]
         for _ in range(rnd.choice((1, 1, 2, 3))):
             i, j = rnd.randrange(len(o)), rnd.randrange(len(o))
@@ -467,15 +504,22 @@ def _search(items, g, opt, seconds, rnd, seeds=None, known=None, cache=None):
                 o.insert(j, o.pop(i))
             else:
                 o[i]["gene"] = 1 - o[i].get("gene", 0)
-        res = pack(o, g, opt, cache)
+        if halt:
+            halt["cut"] = False
+        res = pack(o, g, opt, cache, halt)
+        if halt and halt.get("cut"):
+            break  # tentativa incompleta não substitui a última que terminou
         sc = score(res)
         iters += 1
         if sc <= best[2]:
             best = (o, res, sc)
+    if best is None:
+        blank = ([], [it["uid"] for it in items], ["prazo"] * len(items))
+        best = (list(items), blank, score(blank))
     return best[0], best[1], best[2], iters
 
 
-def nest_group(g, items, opt, seconds, seed=1, crit="x"):
+def nest_group(g, items, opt, seconds, seed=1, crit="x", halt=None):
     """g={w,h}; items=[{id,rings,mirror,area,rot?}] já expandidos por quantidade.
 
     Etapa 1 (grossa, ~55% do tempo): grade de 4 mm, muitos ângulos, acha ordem e giro.
@@ -497,38 +541,48 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x"):
     cs1 = max(cs, 4.0) if free_any else cs
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
     o1 = {"cs": cs1, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs1)}
-    order, res, sc, it1 = _search(items, g, o1, t1, rnd)
-    # etapa 2: refina ângulos ao redor do escolhido por peça
-    chosen = {}
-    for sh in res[0]:
-        for uid, pid, a, mi, x, y in sh.placed:
-            chosen[uid] = (a, mi)
-    fine = []
-    for it in order:
-        n = dict(it)
-        a = chosen.get(it["uid"], (None, 0))[0]
-        if a is not None and free_any and len(it["angs"]) > 4:
-            n["angs"] = sorted(set(refine(a)) | ({0.0, 180.0} if 0.0 in it["angs"] else set()))
-        fine.append(n)
-    o2 = {"cs": cs, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs)}
-    cache2 = {}
-    tp = time.time()
-    r1 = pack(fine, g, o2, cache2)
-    tp = time.time() - tp  # custo de uma tentativa na grade fina
-    best = (fine, r1, score(r1))
+    if halt is None:
+        halt = {"t": time.time() + max(0.0, seconds), "stop": None, "cut": False}
+    order, res, sc, it1 = _search(items, g, o1, t1, rnd, halt=halt)
     it2 = 0
-    # O prazo vale: só gasta outra tentativa na grade fina se ainda couber no tempo pedido.
-    if time.time() - t0 + tp < seconds:
-        plain = sorted(items, key=lambda i: -i["area"])
-        r2 = pack(plain, g, o2, cache2)
-        if score(r2) < best[2]:
-            best = (plain, r2, score(r2))
-    left = seconds - (time.time() - t0)
-    if left > tp:
-        order2, res2, sc2, it2 = _search(items, g, o2, left - tp, rnd, known=best, cache=cache2)
-        if sc2 < best[2]:
-            best = (order2, res2, sc2)
-    packed = best[1]
+    if halt.get("cut"):
+        packed = res  # etapa grossa cortada: não começa a grade fina
+    else:
+        # etapa 2: refina ângulos ao redor do escolhido por peça
+        chosen = {}
+        for sh in res[0]:
+            for uid, pid, a, mi, x, y in sh.placed:
+                chosen[uid] = (a, mi)
+        fine = []
+        for it in order:
+            n = dict(it)
+            a = chosen.get(it["uid"], (None, 0))[0]
+            if a is not None and free_any and len(it["angs"]) > 4:
+                n["angs"] = sorted(set(refine(a)) | ({0.0, 180.0} if 0.0 in it["angs"] else set()))
+            fine.append(n)
+        o2 = {"cs": cs, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs)}
+        cache2 = {}
+        tp = time.time()
+        halt["cut"] = False
+        r1 = pack(fine, g, o2, cache2, halt)
+        tp = time.time() - tp  # custo de uma tentativa na grade fina
+        if halt.get("cut"):
+            packed = res  # fina incompleta: fica a etapa grossa, que terminou
+        else:
+            best = (fine, r1, score(r1))
+            # O prazo vale: só gasta outra tentativa na grade fina se ainda couber no tempo pedido.
+            if time.time() - t0 + tp < seconds and not _due(halt):
+                halt["cut"] = False
+                plain = sorted(items, key=lambda i: -i["area"])
+                r2 = pack(plain, g, o2, cache2, halt)
+                if not halt.get("cut") and score(r2) < best[2]:
+                    best = (plain, r2, score(r2))
+            left = seconds - (time.time() - t0)
+            if left > tp and not halt.get("cut") and not _due(halt):
+                order2, res2, sc2, it2 = _search(items, g, o2, left - tp, rnd, known=best, cache=cache2, halt=halt)
+                if not halt.get("cut") and sc2 < best[2]:
+                    best = (order2, res2, sc2)
+            packed = best[1]
     sheets, fail = packed[0], packed[1]
     why = packed[2] if len(packed) > 2 else ["tamanho"] * len(fail)
     return {
@@ -544,8 +598,9 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x"):
 
 
 def _worker(args):
-    g, items, opt, seconds, seed, crit = args
-    return nest_group(g, items, opt, seconds, seed, crit)
+    g, items, opt, seconds, seed, crit, deadline, stop = args
+    halt = {"t": deadline, "stop": stop or None, "cut": False}
+    return nest_group(g, items, opt, seconds, seed, crit, halt)
 
 
 def _key(r):
@@ -585,7 +640,19 @@ def _rules(payload):
     }
 
 
-def nest_all(payload, pool=None, workers=1):
+def _none(items):
+    """Grupo que não chegou a rodar: o prazo ou a parada já tinham vencido."""
+    return {
+        "sheets": [],
+        "fail": [it.get("id") for it in items],
+        "fail_why": ["prazo"] * len(items),
+        "iters": 0,
+        "extent": [],
+        "workers": 1,
+    }
+
+
+def nest_all(payload, pool=None, workers=1, stop_file=None):
     """Com pool, cada grupo roda em `workers` processos ao mesmo tempo (sementes
     diferentes) e fica a melhor solução; usa todos os núcleos do processador."""
     opt = {
@@ -600,19 +667,42 @@ def nest_all(payload, pool=None, workers=1):
     workers = max(1, min(workers, want))
     groups = payload["groups"]
     weight = {k: max(1.0, sum(i["area"] for i in v["items"])) for k, v in groups.items()}
-    wsum = sum(weight.values())
+    wsum = sum(weight.values()) or 1.0
+    deadline = time.time() + total
+    halt = {"t": deadline, "stop": stop_file or None, "cut": False}
     out = {}
     for k, v in groups.items():
         g = {"w": v["w"], "h": v["h"]}
-        secs = max(1.0, total * weight[k] / wsum)
+        if _due(halt):
+            out[k] = _none(v["items"])
+            continue
+        # sem piso de 1 s: a soma dos grupos cabe no prazo pedido
+        share = min(total * weight[k] / wsum, max(0.0, deadline - time.time()))
         if pool is None or workers < 2:
-            res = [nest_group(g, v["items"], opt, secs / 2, 1, crit) for crit in ("x", "box")]
+            res = []
+            for crit in ("x", "box"):
+                if _due(halt):
+                    break
+                left = deadline - time.time()
+                if left <= 0:
+                    break
+                # cada critério usa metade da cota; "box" nem começa se o prazo acabou
+                budget = min(share / 2.0, left)
+                if budget <= 0:
+                    break
+                halt["cut"] = False
+                res.append(nest_group(g, v["items"], opt, budget, 1, crit, halt))
+                if halt.get("cut"):
+                    break
+            if not res:
+                out[k] = _none(v["items"])
+                continue
             out[k] = min(res, key=_key)
             out[k]["iters"] = sum(r["iters"] for r in res)
             out[k]["workers"] = 1
             continue
         # metade dos núcleos com cada critério de posição; fica a melhor solução
-        futs = [pool.submit(_worker, (g, v["items"], opt, secs, 1 + 97 * n, "box" if n % 2 else "x")) for n in range(workers)]
+        futs = [pool.submit(_worker, (g, v["items"], opt, share, 1 + 97 * n, "box" if n % 2 else "x", deadline, stop_file or "")) for n in range(workers)]
         res = [f.result() for f in futs]
         best = min(res, key=_key)
         best["iters"] = sum(r["iters"] for r in res)

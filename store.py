@@ -1,7 +1,9 @@
 """Persistência em JSON no servidor.
 
 Arquivos (pasta `data/`, ou a variável NEST_DATA):
-  store.json          projetos, modelos (cores), presets, histórico, exportações, configurações
+  store.json          projetos, modelos (cores), presets, configurações
+  history.jsonl       histórico (uma linha por registro; um store.json antigo é copiado para cá)
+  exports.jsonl       exportações, o mesmo formato
   project_<id>.json   peças, arquivos de origem e contadores de sequência de um projeto
 Toda gravação é atômica (temporário + os.replace) e guarda a versão anterior em .bak.
 Se o arquivo principal estiver corrompido, o .bak é usado e o arquivo ruim é preservado ao lado.
@@ -48,8 +50,45 @@ def now() -> str:
 def empty() -> dict:
     return {
         "version": 1, "rev": 0, "projects": [], "models": [], "presets": [],
-        "history": [], "exports": [], "settings": dict(DEFAULT_SETTINGS),
+        "settings": dict(DEFAULT_SETTINGS),
     }
+
+
+def _log_path(bucket: str) -> Path:
+    if bucket not in ("history", "exports"):
+        raise ValueError("Registro inválido.")
+    return data_dir() / ("%s.jsonl" % bucket)
+
+
+def _log_lines(path: Path) -> list:
+    if not path.exists():
+        return []
+    return [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+
+def _append_many(bucket: str, entries: list, cap: int, skip_if_suffix: bool = False) -> None:
+    """Acrescenta registros e corta no teto. skip_if_suffix evita duplicar numa migração repetida."""
+    path = _log_path(bucket)
+    existing = _log_lines(path)
+    want = [json.dumps(item, ensure_ascii=False) for item in entries]
+    if skip_if_suffix and want and len(existing) >= len(want) and existing[-len(want):] == want:
+        return
+    kept = (existing + want)[-cap:]
+    _write_file(path, ("\n".join(kept) + ("\n" if kept else "")).encode("utf-8"))
+
+
+def _migrate_logs(raw: dict) -> bool:
+    """Copia history/exports do store.json para JSONL e tira as listas. Repetir não duplica."""
+    changed = False
+    for bucket, cap in (("history", HISTORY_MAX), ("exports", EXPORTS_MAX)):
+        rows = raw.get(bucket)
+        if not isinstance(rows, list):
+            continue
+        if rows:
+            _append_many(bucket, rows, cap, skip_if_suffix=True)
+        raw.pop(bucket)
+        changed = True
+    return changed
 
 
 def check_id(value) -> str:
@@ -112,9 +151,13 @@ def _read_safe(path: Path):
 
 def load() -> dict:
     with LOCK:
-        doc = _read_safe(data_dir() / "store.json") or {}
+        raw = _read_safe(data_dir() / "store.json") or {}
+        if isinstance(raw, dict) and _migrate_logs(raw):
+            _write(raw)  # .bak fica com as listas, para voltar atrás se o JSONL falhar
+        if not isinstance(raw, dict):
+            raw = {}
         base = empty()
-        base.update({k: v for k, v in doc.items() if k in base})
+        base.update({k: v for k, v in raw.items() if k in base})
         base["settings"] = {**DEFAULT_SETTINGS, **(base.get("settings") or {})}
         return base
 
@@ -153,11 +196,30 @@ def log(kind: str, detail: dict | None = None, project: str = "") -> dict:
     with LOCK:
         doc = load()
         entry = {"t": now(), "kind": str(kind)[:60], "project": str(project)[:64], "detail": detail}
-        doc["history"] = (doc["history"] + [entry])[-HISTORY_MAX:]
+        _append_many("history", [entry], HISTORY_MAX)
         if kind == "export":
-            doc["exports"] = (doc["exports"] + [entry])[-EXPORTS_MAX:]
-        _write(doc)  # o histórico não muda `rev`: ele só controla os dados editáveis
-        return {"rev": doc["rev"]}
+            _append_many("exports", [entry], EXPORTS_MAX)
+        return {"rev": doc["rev"]}  # o histórico não muda `rev`: ele só controla os dados editáveis
+
+
+def read_history(offset: int = 0, limit: int = 50, bucket: str = "history") -> dict:
+    """Página mais recente primeiro. limit fica entre 1 e 100; bucket só history ou exports."""
+    if bucket not in ("history", "exports"):
+        raise ValueError("Registro inválido.")
+    if type(offset) is not int or offset < 0:
+        raise ValueError("offset inválido.")
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("limit inválido.")
+    with LOCK:
+        lines = _log_lines(_log_path(bucket))
+    page = list(reversed(lines))[offset:offset + limit]
+    items = []
+    for line in page:
+        try:
+            items.append(json.loads(line))
+        except ValueError:
+            continue
+    return {"total": len(lines), "offset": offset, "limit": limit, "items": items}
 
 
 def load_project(pid: str) -> dict:
@@ -213,8 +275,9 @@ def snapshot(keep: int = 14) -> Path | None:
         tmp = root / (day.name + ".tmp")  # pasta parcial nunca fica com o nome do dia
         shutil.rmtree(tmp, ignore_errors=True)
         tmp.mkdir(parents=True)
-        for src in data_dir().glob("*.json"):
-            shutil.copy2(src, tmp / src.name)
+        for pattern in ("*.json", "*.jsonl"):
+            for src in data_dir().glob(pattern):
+                shutil.copy2(src, tmp / src.name)
         tmp.rename(day)
         days = sorted(p for p in root.iterdir() if p.is_dir() and re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.name))
         for old in days[:-keep] if keep > 0 else []:

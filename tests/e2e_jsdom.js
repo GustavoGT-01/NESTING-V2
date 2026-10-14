@@ -84,9 +84,12 @@ const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
     ok(w.eval('S').projectId&&w.eval('S').parts.length===3,'após reabrir: projeto e 3 peças restaurados');
     ok(w.eval('S').sets.some(s=>s.id==='mbacio'&&s.color==='#4cc9f0'),'cor do modelo persistida após reiniciar');
     const st=JSON.parse(fs.readFileSync(path.join(data,'store.json'),'utf8'));
-    const kinds=st.history.map(h=>h.kind);
+    ok(!st.history&&!st.exports,'store.json não carrega mais histórico nem exportações');
+    const hist=fs.readFileSync(path.join(data,'history.jsonl'),'utf8').trim().split(/\n/).map(JSON.parse);
+    const kinds=hist.map(h=>h.kind);
     ok(['project.create','import','export'].every(k=>kinds.includes(k)),'histórico: '+kinds.join(', '));
-    const ex=st.exports[0].detail;ok(ex.files[0].ok&&ex.files[0].sources.length>0&&ex.project.code==='POLTRONA-A','exportação registrada com origem, projeto e validação');
+    const ex=fs.readFileSync(path.join(data,'exports.jsonl'),'utf8').trim().split(/\n/).map(JSON.parse)[0].detail;
+    ok(ex.files[0].ok&&ex.files[0].sources.length>0&&ex.project.code==='POLTRONA-A','exportação registrada com origem, projeto e validação');
     // outro projeto fica separado
     $('#projNew').click();$('#pjCode').value='CADEIRA-B';$('#pjProd').value='Cadeira B';$('#pjOk').click();await sleep(800);
     ok(w.eval('S').parts.length===0&&w.eval('S').projectId!==st.projects[0].id,'novo projeto começa vazio (sem mistura)');

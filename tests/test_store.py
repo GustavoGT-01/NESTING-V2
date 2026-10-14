@@ -34,7 +34,8 @@ class StoreTests(unittest.TestCase):
     def test_history_cannot_be_overwritten_by_client(self):
         store.log("import", {"n": 1}, "p1")
         store.save({"history": []}, store.load()["rev"])   # chave não editável
-        self.assertEqual(len(store.load()["history"]), 1)
+        self.assertNotIn("history", store.load())
+        self.assertEqual(store.read_history()["total"], 1)
 
     def test_history_does_not_invalidate_rev(self):
         r = store.load()["rev"]
@@ -43,7 +44,8 @@ class StoreTests(unittest.TestCase):
 
     def test_export_log_goes_to_exports(self):
         store.log("export", {"file": "a.eps"}, "p1")
-        self.assertEqual(store.load()["exports"][0]["detail"]["file"], "a.eps")
+        self.assertNotIn("exports", store.load())
+        self.assertEqual(store.read_history(bucket="exports")["items"][0]["detail"]["file"], "a.eps")
 
     def test_corrupt_main_uses_backup_and_keeps_bad_file(self):
         store.save({"models": [{"id": "x"}]}, 0)
@@ -92,9 +94,9 @@ class StoreTests(unittest.TestCase):
         doc["exports"] = [{"kind": "export"}] * store.EXPORTS_MAX
         store._write(doc)
         store.log("export", {"file": "ultimo.eps"})
-        ex = store.load()["exports"]
-        self.assertEqual(len(ex), store.EXPORTS_MAX)
-        self.assertEqual(ex[-1]["detail"]["file"], "ultimo.eps")
+        page = store.read_history(0, 1, "exports")
+        self.assertEqual(page["total"], store.EXPORTS_MAX)
+        self.assertEqual(page["items"][0]["detail"]["file"], "ultimo.eps")
 
     def test_big_or_bad_detail_rejected(self):
         with self.assertRaises(ValueError):
@@ -102,7 +104,7 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             store.log("export", [1])
         store.log("nota", "texto curto")
-        self.assertEqual(len(store.load()["history"]), 1)
+        self.assertEqual(store.read_history()["total"], 1)
 
     def test_recovered_backup_is_promoted(self):
         store.save({"models": [{"id": "x"}]}, 0)
@@ -156,17 +158,33 @@ class StoreTests(unittest.TestCase):
 
     def test_snapshot_daily_and_prunes(self):
         store.save({"models": [{"id": "m"}]}, 0)
+        store.log("import", {"n": 1})
         root = self.d / "backups"
         for i in range(1, 17):
             (root / ("2000-01-%02d" % i)).mkdir(parents=True)
         day = store.snapshot(keep=14)
         self.assertTrue((day / "store.json").exists())
+        self.assertTrue((day / "history.jsonl").exists())
         self.assertIsNone(store.snapshot(keep=14))       # já feito hoje
         days = sorted(p.name for p in root.iterdir())
         self.assertEqual(len(days), 14)
         self.assertIn(day.name, days)
         self.assertNotIn("2000-01-01", days)
         self.assertEqual(store.load()["models"], [{"id": "m"}])  # load segue no topo de data/
+
+    def test_old_store_history_moves_once(self):
+        doc = store.empty()
+        doc["history"] = [{"t": "t", "kind": "import", "project": "p", "detail": {"n": 1}}]
+        doc["exports"] = [{"t": "t", "kind": "export", "project": "p", "detail": {"file": "a.eps"}}]
+        store._write(doc)
+        store.load()
+        store.load()  # segunda leitura não duplica
+        raw = json.loads((self.d / "store.json").read_text(encoding="utf-8"))
+        self.assertNotIn("history", raw)
+        self.assertNotIn("exports", raw)
+        self.assertEqual(store.read_history()["total"], 1)
+        self.assertEqual(store.read_history(bucket="exports")["items"][0]["detail"]["file"], "a.eps")
+        self.assertEqual((self.d / "history.jsonl").read_text(encoding="utf-8").count("\n"), 1)
 
 
 class ServerTests(unittest.TestCase):
@@ -227,6 +245,19 @@ class ServerTests(unittest.TestCase):
         finally:
             for name in ("store.json", "store.json.bak"):
                 (d / name).unlink()
+
+    def test_history_page_rejects_bad_query(self):
+        st, _ = self.call("/api/history", {"kind": "import", "detail": {"n": 1}})
+        self.assertEqual(st, 200)
+        st, doc = self.call("/api/store")
+        self.assertNotIn("history", doc)
+        st, page = self.call("/api/history?limit=10")
+        self.assertEqual(st, 200)
+        self.assertEqual(page["items"][0]["kind"], "import")
+        st, _ = self.call("/api/history?limit=0")
+        self.assertEqual(st, 400)
+        st, _ = self.call("/api/history?bucket=../store")
+        self.assertEqual(st, 400)
 
     def test_bad_project_id_rejected(self):
         st, _ = self.call("/api/project/..%2fstore", {"parts": []})

@@ -47,8 +47,9 @@ class SecurityTests(unittest.TestCase):
         return self.req("POST", path, h, body, **kw)[0]
 
     def test_page_is_served(self):
-        for p in ("/", "/index.html"):
+        for p in ("/", "/index.html", "/app.js"):
             self.assertEqual(self.req("GET", p)[0], 200, p)
+        self.assertEqual(self.req("GET", "/app.js/../server.py")[0], 404)
 
     def test_only_page_is_static(self):
         for p in ("/%64ata/store.json", "/DATA/x", "/server.p%79", "/server.py.", "/.git/HEAD",
@@ -87,9 +88,19 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(h.get("X-Content-Type-Options"), "nosniff", p)
             self.assertEqual(h.get("X-Frame-Options"), "DENY", p)
             self.assertTrue(h.get("Referrer-Policy"), p)
-            self.assertIn("default-src", h.get("Content-Security-Policy") or "", p)
-            self.assertIn("frame-ancestors 'none'", h.get("Content-Security-Policy") or "", p)
+            csp = h.get("Content-Security-Policy") or ""
+            self.assertIn("default-src", csp, p)
+            self.assertIn("script-src 'self'", csp, p)
+            self.assertNotIn("script-src 'self' 'unsafe-inline'", csp, p)
+            self.assertIn("frame-ancestors 'none'", csp, p)
             self.assertIn("no-store", h.get("Cache-Control") or "", p)
+
+    def test_log_file_has_request_line_not_poll(self):
+        self.req("GET", "/api/nest/poll/none")
+        self.req("GET", "/api/store")
+        text = (Path(os.environ["NEST_DATA"]) / "logs" / "server.log").read_text(encoding="utf-8")
+        self.assertIn("GET /api/store", text)
+        self.assertNotIn("/api/nest/poll/", text)
 
     def test_nest_start_bad_seconds_400(self):
         for s in ("Infinity", "NaN", "-Infinity", "0", "-1", "7201", "\"x\""):

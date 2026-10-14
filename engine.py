@@ -73,8 +73,8 @@ def run_motor(tool: str, payload: dict, workers: int) -> dict:
     return json.loads(done.stdout.decode("utf-8"))
 
 
-def _python(payload: dict, pool, workers: int) -> dict:
-    out = nest.nest_all(payload, pool, workers)
+def _python(payload: dict, pool, workers: int, stop_file: str | None = None) -> dict:
+    out = nest.nest_all(payload, pool, workers, stop_file=stop_file)
     for res in out.values():
         res["engine"] = "python"
     return out
@@ -129,7 +129,7 @@ class Job:
                         raise
                     print("Motor compilado falhou (%s); usando o nest.py." % exc, file=sys.stderr)
                     self.engine = "python"
-            self.result = _python(payload, pool, workers)
+            self.result = _python(payload, pool, workers, str(self.stop_file))
         except Exception as exc:
             self.error = str(exc) or "falha no encaixe"
         finally:
@@ -197,7 +197,7 @@ class Job:
         return final
 
     def stop(self) -> None:
-        """Pede ao motor para fechar com o melhor até agora (só o compilado atende)."""
+        """Pede para fechar com o melhor até agora. O compilado e o nest.py leem este arquivo."""
         self.stopping = True
         try:
             self.stop_file.touch()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import multiprocessing
 import os
 import shutil
@@ -10,6 +11,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+from logging.handlers import RotatingFileHandler
 from concurrent.futures import ProcessPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,7 +25,7 @@ HOST = "127.0.0.1"
 PORT = 8080
 MAX_BODY = 100 * 1024 * 1024  # maior corpo de POST aceito (DWG grande cabe folgado)
 CSP = (
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 )
 WORKERS = max(1, int(os.environ.get("NEST_WORKERS", "0") or 0) or (os.cpu_count() or 1))
@@ -144,8 +146,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _static(self) -> bool:
         # só a página é servida; dados, código e .git ficam de fora
-        if self.path.split("?", 1)[0] in ("/", "/index.html"):
+        path = self.path.split("?", 1)[0]
+        if path in ("/", "/index.html"):
             self.path = "/index.html"
+            return True
+        if path == "/app.js":  # o script da página; nada mais sai da pasta
             return True
         self.send_error(404)
         return False
@@ -181,6 +186,20 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._fail(400, str(exc))
             except ValueError as exc:
                 return self._fail(500, str(exc))
+        elif path == "/api/history":
+            query = self.path.partition("?")[2]
+            args = {}
+            for part in query.split("&"):
+                if not part:
+                    continue
+                key, _, val = part.partition("=")
+                args[key] = val
+            try:
+                offset = int(args["offset"]) if args.get("offset") else 0
+                limit = int(args["limit"]) if args.get("limit") else 50
+                return self._json(store.read_history(offset, limit, args.get("bucket") or "history"))
+            except (ValueError, KeyError) as exc:
+                return self._fail(400, str(exc) or "consulta inválida")
         elif path.startswith("/api/nest/poll/"):
             job = engine.get(path.rsplit("/", 1)[1])
             if job is None:
@@ -314,7 +333,28 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if "/api/nest/poll/" in self.path:
             return  # consulta repetida a cada meio segundo: não polui o registro
-        print("[%s] %s" % (self.log_date_time_string(), fmt % args))
+        line = fmt % args  # a mesma linha do console: caminho do pedido, sem corpo
+        print("[%s] %s" % (self.log_date_time_string(), line))
+        _file_log().info(line)
+
+
+def _file_log() -> logging.Logger:
+    lg = logging.getLogger("nest.server")
+    folder = store.data_dir() / "logs"
+    target = str(folder / "server.log")
+    if lg.handlers and getattr(lg, "_nest_path", None) == target:
+        return lg
+    for old in list(lg.handlers):
+        lg.removeHandler(old)
+        old.close()
+    folder.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(target, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    lg.setLevel(logging.INFO)
+    lg.addHandler(handler)
+    lg.propagate = False
+    lg._nest_path = target
+    return lg
 
 
 class Server(ThreadingHTTPServer):
