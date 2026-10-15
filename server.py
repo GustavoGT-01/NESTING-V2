@@ -23,7 +23,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
-import cam
+try:  # módulo de usinagem CNC: opcional, fica fora do instalador enquanto está em desenvolvimento
+    import cam
+except ImportError:
+    cam = None
 import engine
 import eps
 import store
@@ -53,6 +56,15 @@ h1{font-size:20px;margin:0}p{margin:0;color:#9aa9ba;font-size:14px}input{font:in
 button{font:inherit;font-weight:600;padding:11px;border:0;border-radius:10px;background:#38bdf8;color:#04121c;cursor:pointer}.e{color:#f87171}</style></head>
 <body><form method="post" action="/api/login"><h1>Encaixe Chapa</h1><p>Digite o PIN mostrado no computador principal, em Presets &rsaquo; Acesso pela rede.</p>
 %s<input name="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required autofocus aria-label="PIN"><button>Entrar</button></form></body></html>"""
+
+
+def labels_available() -> bool:
+    """Etiquetas com QR: em desenvolvimento, ocultas até NEST_ETIQUETAS=1 (e fora do instalador)."""
+    return os.environ.get("NEST_ETIQUETAS") == "1" and (ROOT / "etiquetas.js").is_file()
+
+
+def cnc_available() -> bool:
+    return cam is not None and (ROOT / "sim.js").is_file()
 
 
 def _net_path() -> Path:
@@ -298,7 +310,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.path = "/index.html"
             return True
-        if path in ("/app.js", "/sim.js"):  # os scripts da página; nada mais sai da pasta
+        if path in ("/app.js", "/sim.js", "/etiquetas.js"):  # os scripts da página; nada mais sai da pasta
             return True
         self.send_error(404)
         return False
@@ -322,6 +334,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._host_ok() or not self._auth_ok():
             return
         path = self.path.split("?", 1)[0]
+        if path == "/api/modules":
+            return self._json({"cnc": cnc_available(), "etiquetas": labels_available()})
         if path == "/api/rede":
             if self._remote():
                 return self._fail(403, "Só no computador principal.")
@@ -498,6 +512,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self._fail(400, "Falha ao gerar o EPS: %s" % exc)
             return
         elif path == "/api/gcode":
+            if not cnc_available():
+                return self._fail(404, "Módulo de usinagem CNC não instalado.")
             try:
                 body = json.loads(data.decode("utf-8"))
                 out = []

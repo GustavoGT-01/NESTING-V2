@@ -198,10 +198,19 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .plan-item span{display:flex;flex-direction:column;min-width:0}.plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.plan-item small{color:var(--mu);font-size:12px}
 .plan-item.in{opacity:.55}
 .plan-row{grid-template-columns:auto auto minmax(0,1fr) 44px 92px auto}
+.plan-rule{grid-column:3/-1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mu)}.plan-rule select{width:auto;padding:4px 8px;font-size:12px}
 .plan-ord{display:flex;flex-direction:column;gap:2px;align-items:center}.plan-ord button{width:26px;height:20px;padding:0;font-size:11px;line-height:1}.plan-ord b{font-size:11px;color:var(--mu);font-weight:600}
 .plan-opts{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:var(--r2);background:var(--bg2);font-size:13px}
 .plan-row input[type=color]{width:44px;height:36px;padding:3px;cursor:pointer}
 .xfmt{display:grid;grid-template-columns:44px 1fr 1fr;gap:8px;align-items:center}.xfmt b{font-size:14px}
+.nav[hidden]{display:none}
+.plan-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.plan-fields .plan-notes{grid-column:1/-1}
+@media (max-width:900px){.plan-fields{grid-template-columns:1fr 1fr}}
+.st{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:650;background:color-mix(in srgb,var(--stc) 18%,transparent);color:var(--stc)}
+.st-planejado{--stc:var(--mu)}.st-encaixado{--stc:var(--ac)}.st-em_corte{--stc:var(--warn)}.st-cortado{--stc:var(--ok)}.st-entregue{--stc:var(--alt)}.st-atrasado{--stc:var(--bad)}
+.psum-hd .st-row{display:flex;flex-direction:row;gap:6px;flex-wrap:wrap}
+.cut-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}.cut-list label{font-size:13px}
+.cut-bar{height:6px;border-radius:99px;background:var(--sf3);overflow:hidden}.cut-bar i{display:block;height:100%;background:var(--ok)}
 .plan-def{color:var(--mu);font-size:12px;line-height:1.5}
 .plan-saved{display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--ok) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ok) 35%,var(--ln));border-radius:var(--r2);padding:10px 12px;font-size:13px}
 .plan-row input{text-align:center}
@@ -437,14 +446,6 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <label class="drop" id="drop"><input id="file" type="file" accept=".dxf,.dwg,.svg" multiple hidden>
       <b>Solte vários DWG / DXF / SVG</b>Os arquivos vão para o projeto selecionado, após uma revisão</label>
     <div class="msg" id="imsg"></div>
-    <details><summary class="sub">Padrões de leitura</summary>
-      <div class="row subbody">
-        <label class="f">Unidade do arquivo<select id="unit"><option value="auto">Automática</option><option value="1">mm</option><option value="10">cm</option><option value="1000">m</option><option value="25.4">polegada</option></select></label>
-        <label class="f">Tolerância de ligação (mm)<input id="tol" type="number" value="0.05" step="0.01" min="0.001"></label>
-        <label class="f">Material padrão<select id="defMat"></select></label>
-        <label class="f">Espessura padrão (mm)<span id="defThBox" style="display:contents"><input id="defTh" type="number" value="3" step="0.1"></span></label>
-      </div>
-      <div class="msg" id="defMatHint"></div></details>
     <datalist id="mats"><option>Aço carbono</option><option>Inox 304</option><option>Alumínio</option><option>Galvanizado</option><option>MDF</option></datalist>
   
   </div></section>
@@ -498,6 +499,12 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
         <b>SVG</b><button type="button" data-x="svg" data-xm="each" disabled>Chapa por chapa</button><button type="button" data-x="svg" data-xm="one" disabled>Todas em um arquivo</button>
       </div>
       <div class="msg">Em "todas em um arquivo" as chapas ficam uma acima da outra, com 200 mm entre elas.</div>
+    </div>
+    <div class="xcard" id="lblCard" hidden>
+      <div class="xcard-hd"><b>Etiquetas</b><span>uma por peça, com QR code</span></div>
+      <label class="f">Formato<select id="lblFmt"><option value="a4">A4 · 24 etiquetas de 70 × 37 mm</option><option value="t100">Térmica · 100 × 50 mm</option></select></label>
+      <div class="btns"><button type="button" class="pri" id="lblGo" disabled>Gerar etiquetas (PDF)</button></div>
+      <div class="msg">Cada etiqueta traz produto, peça, chapa na ordem de corte, material, medida e planejamento; o QR guarda os mesmos dados.</div>
     </div>
     <div class="xcard">
       <div class="xcard-hd"><b>Relatório</b><span>PDF com chapas e lista de peças</span></div>
@@ -553,6 +560,14 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     </div></details>
   </div></section>
   <section class="sec" data-view="presets" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><h2>Presets de encaixe</h2></header><div class="body">
+    <details open><summary class="sub">Leitura de arquivos (importação de peças)</summary>
+      <div class="row subbody">
+        <label class="f">Unidade do arquivo<select id="unit"><option value="auto">Automática</option><option value="1">mm</option><option value="10">cm</option><option value="1000">m</option><option value="25.4">polegada</option></select></label>
+        <label class="f">Tolerância de ligação (mm)<input id="tol" type="number" value="0.05" step="0.01" min="0.001"></label>
+        <label class="f">Material padrão<select id="defMat"></select></label>
+        <label class="f">Espessura padrão (mm)<span id="defThBox" style="display:contents"><input id="defTh" type="number" value="3" step="0.1"></span></label>
+      </div>
+      <div class="msg" id="defMatHint"></div></details>
     <label class="f">Nome do preset<input id="presetName" autocomplete="off" maxlength="80" placeholder="Ex.: MDF 15 mm"></label>
     <div class="row"><label class="f">Material<input id="presetMat" list="mats" autocomplete="off" maxlength="60" placeholder="Ex.: MDF"></label><label class="f">Espessura (mm)<input id="presetTh" type="number" step="0.1" min="0.1"></label></div>
     <div class="row"><label class="f">Comprimento da chapa (mm)<input id="presetW" type="number" step="1" min="1"></label><label class="f">Largura da chapa (mm)<input id="presetH" type="number" step="1" min="1"></label></div>
@@ -595,7 +610,8 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <div id="planHome">
       <header class="board-hd">
         <div class="board-title"><h2>Planejamento</h2><span class="cnt" id="planCount"></span><button type="button" class="pri" id="planNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo planejamento</button></div>
-        <div class="board-tools"><input id="planSearch" type="search" autocomplete="off" placeholder="Buscar planejamento…" aria-label="Buscar planejamento"></div>
+        <div class="board-tools"><input id="planSearch" type="search" autocomplete="off" placeholder="Buscar planejamento, cliente ou OP…" aria-label="Buscar planejamento"></div>
+        <div class="mat-chips" id="planStatusChips" role="group" aria-label="Filtrar por status"></div>
         <div class="msg">Cada planejamento junta produtos e quantidades (ex.: PLANEJAMENTO-LOTE1010). Abra um para editar e enviar ao encaixe.</div>
       </header>
       <div class="pgrid" id="planCards"></div>
@@ -605,6 +621,13 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
         <div class="board-title prod-title"><button type="button" id="planBack" aria-label="Voltar para os planejamentos"><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg>Planejamentos</button>
           <input id="planName" class="prod-name" maxlength="120" autocomplete="off" aria-label="Nome do planejamento"><span class="cnt" id="planInfo"></span>
           <button type="button" class="pri" id="planSend"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg>Enviar para o encaixe</button></div>
+        <div class="plan-fields">
+          <label class="f">Cliente<input data-plf="client" maxlength="120" autocomplete="off"></label>
+          <label class="f">OP<input data-plf="op" maxlength="60" autocomplete="off"></label>
+          <label class="f">Entrega<input data-plf="due" type="date"></label>
+          <label class="f">Status<select data-plf="status"><option value="planejado">Planejado</option><option value="encaixado">Encaixado</option><option value="em_corte">Em corte</option><option value="cortado">Cortado</option><option value="entregue">Entregue</option></select></label>
+          <label class="f plan-notes">Observações<input data-plf="notes" maxlength="400" autocomplete="off"></label>
+        </div>
         <div class="msg">As peças entram no encaixe multiplicadas pela quantidade de cada produto, com o giro, espelhamento, espaço e margem de cada peça.</div>
       </header>
       <div class="plan">
@@ -626,6 +649,9 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
         <div class="msg">Base de produtos: cada produto guarda as peças importadas, com quantidade, giro e espelhamento.</div>
       </header>
       <div class="pgrid" id="prodList"></div>
+      <details class="old-proj" id="oldProj" hidden><summary class="sub">Projetos antigos</summary><div class="subbody">
+        <div class="msg">Projetos da versão anterior, guardados em data/. Importe como produto para usar no planejamento.</div>
+        <div class="plan-list" id="oldList"></div></div></details>
     </div>
     <div id="prodDetail" hidden>
       <header class="board-hd">
@@ -696,6 +722,5 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
   </div>
 </div>
 <script src="/app.js"></script>
-<script src="/sim.js"></script>
 </body>
 </html>

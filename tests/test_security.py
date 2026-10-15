@@ -71,6 +71,15 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(self.post("/api/history", body, headers={"Origin": o}), 200, o)
         self.assertEqual(self.post("/api/history", body), 200)  # sem Origin (curl, testes): aceito
 
+    def test_cnc_module_optional(self):
+        self.assertEqual(self.req("GET", "/api/modules")[0], 200)
+        saved = server.cam
+        try:
+            server.cam = None   # instalador sem o módulo de usinagem
+            self.assertEqual(self.post("/api/gcode", {"sheets": [], "cam": {}}), 404)
+        finally:
+            server.cam = saved
+
     def test_bad_content_length(self):
         def send(cl):
             h = {"Content-Type": "application/json"}

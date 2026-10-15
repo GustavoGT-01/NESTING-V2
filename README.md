@@ -55,6 +55,8 @@ O servidor encontra o executável sozinho em `motor/target/release/` e avisa no 
 
 ## Usinagem CNC (G-code)
 
+**Módulo opcional, em desenvolvimento:** `cam.py` + `sim.js`. Sem eles, a aba não aparece e `/api/gcode` responde 404 (`/api/modules` informa o que está instalado). O instalador (`installer/build.ps1`) não leva o módulo. **Etiquetas com QR** (`etiquetas.js`) seguem o mesmo esquema: fora do instalador e ocultas na tela; para ativar em desenvolvimento, ligue o servidor com `NEST_ETIQUETAS=1`.
+
 Aba **Usinagem CNC**, no modelo do Aspire e do Alphacam: biblioteca de ferramentas (diâmetro, nº T, rotação, avanço, mergulho, passo vertical, sobreposição), estratégia de corte e pós-processador. Gera o G-code das chapas encaixadas (`cam.py`, rota `/api/gcode`).
 
 - **Contorno** externo e interno com compensação do raio da fresa, passadas em profundidade, rampa de entrada e sentido concordante ou discordante. "Passar da chapa" desce na mesa de sacrifício.

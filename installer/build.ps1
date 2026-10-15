@@ -17,10 +17,10 @@ Push-Location (Join-Path $root "motor")
 if ($LASTEXITCODE -ne 0) { throw "O motor Rust nao compilou." }
 Pop-Location
 
-# 2) servidor: codigo, pagina e motor
+# 2) servidor: codigo, pagina e motor (sem os modulos em desenvolvimento: cam.py, sim.js e etiquetas.js ficam fora ate ficarem prontos)
 if (Test-Path $app) { Remove-Item $app -Recurse -Force }
 New-Item -ItemType Directory -Force $srv | Out-Null
-foreach ($f in "server.py", "store.py", "engine.py", "nest.py", "eps.py", "cam.py", "index.html", "app.js", "sim.js", "README.md") {
+foreach ($f in "server.py", "store.py", "engine.py", "nest.py", "eps.py", "index.html", "app.js", "README.md") {
     Copy-Item (Join-Path $root $f) $srv
 }
 Copy-Item (Join-Path $root "motor\target\release\motor.exe") $srv

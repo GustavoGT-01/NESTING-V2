@@ -128,8 +128,7 @@ window.addEventListener('pagehide',()=>{const d=pending();if(!d)return;
 /* ---------- projetos ---------- */
 const curProj=()=>S.store.projects.find(p=>p.id===S.projectId)||null;
 const fileName=id=>{const f=S.files.find(x=>x.id===id);return f?f.name:''};
-function renderProj(){const p=curProj();$('#projInfo').textContent='';$('#drop').classList.toggle('off',!p);
-  const n=S.links.length;$('#linkTag').hidden=!n;$('#linkTag').textContent=n?'+ '+S.links.map(l=>projCode(l.id)).join(' + '):''}
+function renderProj(){const p=curProj();$('#projInfo').textContent='';$('#drop').classList.toggle('off',!p);$('#linkTag').hidden=true}
 /* O arquivo do projeto é dado externo: números das peças viram números de verdade antes de chegar ao HTML. */
 const num=(v,d)=>{const n=typeof v==='number'||typeof v==='string'&&v.trim()?+v:NaN;return Number.isFinite(n)?n:d};
 const normPart=p=>({...p,id:num(p.id,0),qty:Math.max(1,Math.round(num(p.qty,1))),th:num(p.th,0)>0?num(p.th,1):1,w:Math.max(0,num(p.w,0)),h:Math.max(0,num(p.h,0)),A:num(p.A,0),holes:Math.max(0,Math.round(num(p.holes,0))),mat:String(p.mat??''),name:String(p.name??''),pick:false});
@@ -141,27 +140,10 @@ async function openProject(id){
   S.uid=Math.max(0,num(d.uid,0));S.parts=(d.parts||[]).map(normPart);for(const p of S.parts)if(!p.id)p.id=++S.uid;
   S.files=d.files||[];S.seq=d.seq||{};S.setQty=d.setQty||{};S.savedNest=d.nest||null;
   S.groups={};for(const k in d.groups||{}){const g=d.groups[k]||{};S.groups[k]={w:num(g.w,3000),h:num(g.h,1250)}}
-  S.links=(d.links||[]).filter(l=>l&&l.id!==id&&S.store.projects.some(p=>p.id===l.id));sent.proj=JSON.stringify(projPayload());await loadGuests();
+  S.links=[];sent.proj=JSON.stringify(projPayload());
   S.res=null;S.snap=null;S.pdf=null;S.tab=null;
   if(S.store.settings.last!==id){S.store.settings.last=id;autosave()}
   renderProj();render();if(S.savedNest&&openSavedNest(true))render()}
-/* ---------- encaixe conjunto: peças de outros projetos entram só para o cálculo ---------- */
-/* As peças de um projeto juntado continuam gravadas no projeto de origem. Aqui são cópias só de leitura,
-   com o id deslocado (base × 1e6) para não colidir com as do projeto aberto; o projeto aberto guarda apenas a lista `links`. */
-const GUEST=1e6;
-const projCode=id=>{const p=S.store.projects.find(x=>x.id===id);return p?p.code:''};
-async function loadGuests(){
-  S.parts=S.parts.filter(p=>!p.guest);
-  for(const l of S.links){
-    try{const d=await api('/api/project/'+l.id);for(const p of d.parts||[]){const q=normPart(p);S.parts.push({...q,id:num(l.base,0)*GUEST+q.id,guest:l.id})}}
-    catch(e){toast('Não foi possível ler o projeto '+projCode(l.id)+': '+e.message,'bad')}}}
-async function linkProject(id,on){
-  if(!S.projectId||id===S.projectId)return;
-  cancelNest();
-  if(on){if(!S.links.some(l=>l.id===id)){let b=1;while(S.links.some(l=>l.base===b))b++;S.links.push({id,base:b})}}
-  else S.links=S.links.filter(l=>l.id!==id);
-  await loadGuests();S.res=null;S.snap=null;S.pdf=null;renderProj();render();
-  status(on?'Peças de '+projCode(id)+' juntadas ao encaixe. Encaixe de novo.':'Peças de '+projCode(id)+' retiradas do encaixe.',false)}
 /* ---------- importação em lote com revisão ---------- */
 const sha256=async buf=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');
 const thFromName=n=>{const m=n.match(/(\d+(?:[.,]\d+)?)\s*mm/i);return m?+m[1].replace(',','.'):null};
@@ -286,11 +268,11 @@ function mask(rings,w,h,cs,r){
 const fits=(sh,m,gx,gy)=>{const{W,occ}=sh;for(const[y,a,b]of m.runs){const o=(gy+y)*W+gx;for(let x=a;x<b;x++)if(occ[o+x])return false}return true};
 function findSpot(sh,m,cap,e=0){
   for(let gx=e;gx<=Math.min(sh.W-m.W-e,cap);gx+=1)for(let gy=e;gy<=sh.H-m.H-e;gy+=1)if(fits(sh,m,gx,gy))return[gx,gy];return null}
-function currentRules(){
+function currentRules(){const pr=(curProj()||{}).prodRules||{};
   return {
     mix:$('#mix').checked,
-    isolate:S.sets.filter(s=>s.isolate).map(s=>s.id),
-    together:S.sets.filter(s=>s.together).map(s=>s.id),
+    isolate:[...S.sets.filter(s=>s.isolate).map(s=>s.id),...(pr.isolate||[])],
+    together:[...S.sets.filter(s=>s.together).map(s=>s.id),...(pr.together||[])],
     forbid:S.forbid.map(p=>[p[0],p[1]])
   };
 }
@@ -323,7 +305,7 @@ function nestGroup(g,items,o,order){
   if(o.seq)order=[...order].sort((a,b)=>(a.rank||0)-(b.rank||0));
   const span=new Map();
   for(const it of order){
-    const gid=it.groupId||'';
+    const gid=it.groupId||it.product||'';
     let put=false;const n0=sheets.length,sp0=o.near&&it.product?span.get(it.product):null;
     let tries=[...Array(n0+1).keys()];
     if(sp0){const pref=[];for(let k=sp0[0];k<=sp0[1]+1;k++)pref.push(k);if(sp0[0]>0)pref.push(sp0[0]-1);tries=[...pref.filter(k=>k<=n0),...tries.filter(k=>!pref.includes(k))]}
@@ -381,7 +363,7 @@ function cancelNest(){if(!NEST.busy)return;NEST.run++;NEST.busy=false;
   JOB=null;progHide();$('#go').disabled=false;$('#nmsg').className='msg w';$('#nmsg').textContent='Encaixe interrompido: o projeto mudou.'}
 async function serverNest(o,run){
   const G=groupsOf(),groups={},byId={},secs=+$('#secs').value,nGroups=Object.keys(G).length;
-  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||'',...(p.gap!=null?{gap:p.gap}:{}),...(p.mar!=null?{mar:p.mar}:{}),...(p.product?{prod:p.product,rank:p.rank||0}:{})})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
+  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||p.product||'',...(p.gap!=null?{gap:p.gap}:{}),...(p.mar!=null?{mar:p.mar}:{}),...(p.product?{prod:p.product,rank:p.rank||0}:{})})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
   const r=await sfetch('/api/nest/start',{method:'POST',body:JSON.stringify({...o,seconds:secs,groups})});
   if(!r.ok)throw Error(await r.text());
   const id=(await r.json()).id;
@@ -452,7 +434,9 @@ $('#nestSave').onclick=async()=>{
   const pl=plans().find(p=>p.id===(curProj()||{}).plan);
   if(pl){try{await api('/api/plan/'+pl.id,{parts:S.parts.filter(p=>!p.guest).map(({pick,guest,...p})=>p),groups:S.groups,seq:S.seq,uid:S.uid,nest:S.savedNest})}
     catch(e){status('Não foi possível gravar no planejamento: '+e.message,true);return}
-    pl.nestAt=S.savedNest.savedAt;pl.nestSheets=sheets;pl.nestDef=snapText(S.snap)}
+    pl.nestAt=S.savedNest.savedAt;pl.nestSheets=sheets;pl.nestDef=snapText(S.snap);
+    {const q=sheetSeq(),list=[];for(const k in S.res)S.res[k].sheets.forEach((sh,i)=>list.push({nn:q.get(k+'|'+i),key:k,products:[...new Set(sh.placed.map(x=>prodPiece(x.it).prod||'Sem produto'))]}));
+     pl.cutList=list.sort((a,b)=>String(a.nn).localeCompare(String(b.nn)));pl.cut={};if(!pl.status||pl.status==='planejado')pl.status='encaixado'}}
   hist('nest.save',{sheets,groups:Object.keys(S.res),plan:pl?pl.id:''});render();await flush();status(pl?'Encaixe salvo no planejamento '+pl.name+'.':'Encaixe salvo na área de encaixe.',false)};
 async function runNest(){
   const run=++NEST.run;NEST.busy=true;$('#go').disabled=true;
@@ -853,7 +837,7 @@ function renderCore(){
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
   const ready=!!(R&&S.snap);$('#xLock').hidden=ready;patPreview();
-  ['pdfPrev','pdfGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});document.querySelectorAll('[data-x]').forEach(b=>{b.disabled=!ready});
+  ['pdfPrev','pdfGo','lblGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});document.querySelectorAll('[data-x]').forEach(b=>{b.disabled=!ready});
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
   const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
   $('#nestInfo').className='msg'+(old?' w':'');$('#nestInfo').textContent=sv?'Encaixe salvo em '+whenLabel(sv.savedAt)+' · '+sv.sheets+' chapa(s).'+(old?' As peças ou chapas mudaram desde então: ele não pode mais ser aberto.':''):'Nenhum encaixe salvo neste projeto.';
@@ -992,7 +976,8 @@ function reportModel(){
   order.sort((a,b)=>String(a.nn).localeCompare(String(b.nn)));
   const products=[...byP.values()].sort((a,b)=>a.rank-b.rank||a.name.localeCompare(b.name,'pt-BR')).map(r=>({...r,sheets:[...r.sheets].sort()}));
   return {
-    plan:pl?pl.name:'',products,order,
+    plan:pl?pl.name:'',order,products,
+    pedido:pl?[pl.client&&['Cliente',pl.client],pl.op&&['OP',pl.op],pl.due&&['Entrega',dueTxt(pl.due)],pl.notes&&['Observações',pl.notes]].filter(Boolean):[],
     job:jobName(),when,whenLabel:when.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'}),
     preset:snap.preset&&snap.preset.name?snap.preset.name:'',
     engine:snap.engine,workers:snap.workers,iters:snap.iters||0,opt:snap.opt,askedCs:snap.askedCs,rotLabel:snap.rotLabel||'',
@@ -1033,7 +1018,7 @@ function fingerprint(m){
 function modelHtml(m){
   const t=m.totals;
   const meta=[
-    ['Trabalho',m.job],['Gerado em',m.whenLabel],
+    ['Trabalho',m.job],['Gerado em',m.whenLabel],...m.pedido,
     m.preset?['Preset',m.preset]:null,
     ['Motor',m.engine==='servidor'?'Servidor'+(m.workers?' · '+m.workers+' núcleo(s)':'')+(m.iters?' · '+m.iters+' iterações da busca':''):'Navegador'],
     ['Materiais',m.groups.map(g=>g.key).join(' · ')||'—'],
@@ -1128,7 +1113,7 @@ $('#modalX').onclick=()=>hideModal('modal');
 $('#modal').onclick=e=>{if(e.target.id==='modal')hideModal('modal')};
 $('#ask').onclick=e=>{if(e.target.id==='ask'&&$('#askNo').onclick)$('#askNo').click()};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#ask').hidden&&$('#askNo').onclick){$('#askNo').click();return}
-  if(!$('#impModal').hidden){$('#impNo').click();return}if(!$('#projModal').hidden){hideModal('projModal');return}hideModal('modal')});
+  if(!$('#impModal').hidden){$('#impNo').click();return}hideModal('modal')});
 
 /* ---------- PDF ---------- */
 const PW=595,PH=842,ML=40,MT=74,MB=44,CW=PW-80;
@@ -1148,7 +1133,7 @@ function T(x,y,text,size,font){return `BT /${font} ${size} Tf 1 0 0 1 ${x.toFixe
 function clipText(text,width,size){const max=Math.max(1,Math.floor((width-4)/(size*0.5)));text=String(text);return text.length>max?text.slice(0,max-3)+'...':text}
 function wrapText(text,size,maxW){const max=Math.max(8,Math.floor(maxW/(size*0.5)));const words=String(text).split(/\s+/),lines=[];let cur='';for(const w of words){const t=cur?cur+' '+w:w;if(t.length>max&&cur){lines.push(cur);cur=w}else cur=t}if(cur)lines.push(cur);return lines.length?lines:['']}
 function hexRgb(hex){const n=parseInt(String(hex).slice(1),16)||0;return[(n>>16)/255,((n>>8)&255)/255,(n&255)/255]}
-function buildPdf(pageContents,images){
+function buildPdf(pageContents,images,box=[595,842]){
   const nImg=images.length,nPages=pageContents.length,firstImg=5,firstPage=5+nImg,pageNums=[];
   for(let i=0;i<nPages;i++) pageNums.push(firstPage+i*2);
   const chunks=[];let off=0;const offsets=[0];
@@ -1163,7 +1148,7 @@ function buildPdf(pageContents,images){
   pageContents.forEach((content,i)=>{
     const pn=pageNums[i],cn=pn+1,cb=latin1(content);
     const xobj=images.map((im,k)=>'/Im'+k+' '+(firstImg+k)+' 0 R').join(' ');
-    addObj(pn,['<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << '+xobj+' >> >> /Contents '+cn+' 0 R >>']);
+    addObj(pn,['<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+box[0]+' '+box[1]+'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << '+xobj+' >> >> /Contents '+cn+' 0 R >>']);
     addObj(cn,['<< /Length '+cb.length+' >>\nstream\n',cb,'\nendstream']);
   });
   const start=off,count=firstPage+nPages*2;
@@ -1235,7 +1220,7 @@ function modelPdf(m){
   push(gapBlock(4));
   push(headBlock('Resumo'));
   const meta=[
-    ['Trabalho',m.job],['Motor',m.engine==='servidor'?'Servidor':'Navegador'],
+    ['Trabalho',m.job],...m.pedido,['Motor',m.engine==='servidor'?'Servidor':'Navegador'],
     ['Núcleos',m.workers?String(m.workers):'—'],['Iterações',m.iters?String(m.iters):'—'],
     ['Chapas',String(t.sheets)],['Pedidas',String(t.requested)],['Encaixadas',String(t.placed)],['De fora',String(t.failed)],
     ['Área chapas',m2txt(t.sheetArea)],['Área peças',m2txt(t.occ)],['Sobra',m2txt(t.waste)],['Aproveitamento',pctxt(t.util)],
@@ -1354,7 +1339,7 @@ function patPreview(){const k=S.tab||Object.keys(S.groups)[0]||'Material · 15 m
     S.ready=true;renderPresets();
     if(!Array.isArray(S.store.products))S.store.products=[];
     if(!S.store.projects.some(p=>p.id===MESA)){S.store.projects.push({id:MESA,code:'MESA',product:'Área de encaixe',order:'',lot:'',createdAt:new Date().toISOString(),status:'aberto',notes:''});await flush()}
-    await openProject(MESA);renderProducts();
+    await openProject(MESA);renderProducts();loadModules();
     if(migrated){hist('presets.migrate',{n:S.store.presets.length});autosave()}
     setSaved('dados no servidor','ok');
   }catch(e){setSaved('servidor indisponível: nada será gravado','bad');renderProj()}
@@ -1516,6 +1501,8 @@ function renderProducts(){const home=!PR.id;$('#prodHome').hidden=!home;$('#prod
       <div class="pcard-meta">${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}</div>
       <div class="pcard-foot"><span class="pcard-hint">Abrir →</span><button type="button" class="icon pcard-del" data-del-prod="${esc(p.id)}" aria-label="Excluir produto ${esc(p.name)}" title="Excluir produto"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`).join('')
       ||`<div class="board-empty">${L.length?'Nenhum produto com esse nome.':'<b>Nenhum produto ainda.</b>Crie o primeiro e importe as peças dele.<button type="button" class="pri" data-new-prod>Novo produto</button>'}</div>`;
+    const old=S.store.projects.filter(p=>p.id!==MESA);$('#oldProj').hidden=!old.length;
+    $('#oldList').innerHTML=old.map(p=>`<div class="plan-item"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.code))}</span><span><b>${esc(p.code)} · ${esc(p.product)}</b><small>${p.createdAt?'Criado em '+esc(dt(p.createdAt)):''}</small></span><button type="button" data-old="${esc(p.id)}">Importar como produto</button></div>`).join('');
     $('#prodSide').innerHTML=`<div class="msg">${L.length?'Abra um produto para ver e editar as peças.':'Crie um produto para começar a base.'}</div>`;return}
   renderProduct()}
 function renderProduct(){const d=PR.doc,P=d.parts,un=P.reduce((a,p)=>a+p.qty,0);
@@ -1541,6 +1528,7 @@ function renderProduct(){const d=PR.doc,P=d.parts,un=P.reduce((a,p)=>a+p.qty,0);
   $('#prodSide').innerHTML=`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(initials(d.name))}</span><div><b>${esc(d.name)}</b><span>${esc(d.files.length)} arquivo(s) importado(s)</span></div></div>
     <dl class="psum-dl"><div><dt>Peças</dt><dd>${esc(P.length)}</dd></div><div><dt>Unidades</dt><dd>${esc(un)}</dd></div></dl>
     ${mats.length?`<div class="psum-links"><b>Materiais</b>${mats.map(m=>`<span class="tag inf">${esc(m)}</span>`).join('')}</div>`:''}
+    <button type="button" data-prod-dup>Duplicar produto</button>
     <button type="button" class="psum-del" data-del-prod="${esc(PR.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir produto</button></div>`}
 function prodCommit(use,partial){const d=PR.doc,done=[];
   for(const r of use){const fid=nid('f'),stem=r.name.replace(/\.\w+$/,''),before=d.parts.length,mat=r.mat.trim(),th=r.th;
@@ -1608,15 +1596,18 @@ function renderPlan(){const pl=curPlan();$('#planHome').hidden=!!pl;$('#planDeta
   const dt=v=>{const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('pt-BR')};
   if(!pl){const L=plans(),q=($('#planSearch').value||'').trim().toLowerCase();
     $('#planCount').textContent=L.length?L.length+' no total':'';
-    $('#planCards').innerHTML=L.filter(p=>!q||String(p.name).toLowerCase().includes(q)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map((p,k)=>`<article class="pcard" style="--i:${k}">
+    const cnt={};L.forEach(p=>{const k=planStatus(p);cnt[k]=(cnt[k]||0)+1});
+    $('#planStatusChips').innerHTML=L.length?`<button type="button" class="mat-chip" data-stf="" aria-pressed="${!PL.stf}">Todos <small>${L.length}</small></button>`+PLAN_ST.filter(([k])=>cnt[k]).map(([k,t])=>`<button type="button" class="mat-chip" data-stf="${k}" aria-pressed="${PL.stf===k}">${t} <small>${cnt[k]}</small></button>`).join('')+(L.some(late)?`<button type="button" class="mat-chip" data-stf="atrasado" aria-pressed="${PL.stf==='atrasado'}">Atrasados <small>${L.filter(late).length}</small></button>`:''):'';
+    $('#planCards').innerHTML=L.filter(p=>(!q||[p.name,p.client,p.op].join(' ').toLowerCase().includes(q))&&(!PL.stf||(PL.stf==='atrasado'?late(p):planStatus(p)===PL.stf))).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map((p,k)=>`<article class="pcard" style="--i:${k}">
       <button type="button" class="pcard-open" data-plan="${esc(p.id)}" aria-label="Abrir planejamento ${esc(p.name)}"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.name))}</span>
         <span class="pcard-txt"><b>${esc(p.name)}</b><span>${esc(planItems(p).length)} produto(s) · ${esc(planUnits(p))} peça(s)</span></span></button>
-      <div class="pcard-meta">${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}${p.sentAt?`<span>Enviado ao encaixe em ${esc(dt(p.sentAt))}</span>`:''}</div>
+      <div class="pcard-meta">${stTag(p)}${p.client?`<span>${esc(p.client)}</span>`:''}${p.op?`<span>OP ${esc(p.op)}</span>`:''}${p.due?`<span>Entrega ${esc(dueTxt(p.due))}</span>`:''}${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}</div>
       <div class="pcard-foot"><span class="pcard-hint">Abrir →</span><button type="button" class="icon pcard-del" data-del-plan="${esc(p.id)}" aria-label="Excluir planejamento ${esc(p.name)}" title="Excluir planejamento"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`).join('')
       ||`<div class="board-empty">${L.length?'Nenhum planejamento com esse nome.':'<b>Nenhum planejamento ainda.</b>Crie um e escolha os produtos e quantidades.<button type="button" class="pri" data-new-plan>Novo planejamento</button>'}</div>`;
     $('#planSide').innerHTML=`<div class="msg">${L.length?'Abra um planejamento para editar e enviar ao encaixe.':'Crie um planejamento para começar.'}</div>`;return}
   const L=planItems(pl),P=prodIdx(),q=($('#planFilter').value||'').trim().toLowerCase();
   if(document.activeElement!==$('#planName'))$('#planName').value=pl.name;
+  document.querySelectorAll('[data-plf]').forEach(el=>{if(document.activeElement!==el)el.value=el.dataset.plf==='status'?planStatus(pl):(pl[el.dataset.plf]||'')});
   $('#planCat').innerHTML=P.filter(p=>!q||String(p.name).toLowerCase().includes(q)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'pt-BR')).map(p=>{const inPlan=L.some(r=>r.id===p.id);
     return `<div class="plan-item${inPlan?' in':''}"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.name))}</span><span><b>${esc(p.name)}</b><small>${esc(p.parts||0)} peça(s) · ${esc(p.units||0)} unidade(s) por produto</small></span>
       <button type="button" data-plan-add="${esc(p.id)}" ${inPlan?'disabled':''}>${inPlan?'Adicionado':'Adicionar'}</button></div>`}).join('')
@@ -1626,15 +1617,18 @@ function renderPlan(){const pl=curPlan();$('#planHome').hidden=!!pl;$('#planDeta
       <span><b>${esc(p.name)}</b><small>${esc((p.units||0)*r.qty)} peça(s) no encaixe</small></span>
       <input type="color" value="${esc(r.color)}" data-plan-color aria-label="Cor de ${esc(p.name)}" title="Cor das peças deste produto no encaixe">
       <label class="f"><input type="number" min="1" step="1" value="${esc(r.qty)}" data-plan-qty aria-label="Quantidade de ${esc(p.name)}"></label>
-      <button type="button" class="icon pcard-del" data-plan-del aria-label="Tirar ${esc(p.name)} do planejamento" title="Tirar do planejamento"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div>`}).join('')
+      <button type="button" class="icon pcard-del" data-plan-del aria-label="Tirar ${esc(p.name)} do planejamento" title="Tirar do planejamento"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
+      <label class="plan-rule">Regra de chapa<select data-plan-rule aria-label="Regra de chapa de ${esc(p.name)}">${[['','Livre'],['isolate','Chapa exclusiva (sem outros produtos)'],['together','Tudo na mesma chapa (o que não couber fica de fora)']].map(([v,t])=>`<option value="${v}" ${(r.rule||'')===v?'selected':''}>${t}</option>`).join('')}</select></label></div>`}).join('')
     ||'<div class="board-empty"><b>Planejamento vazio.</b>Adicione produtos da lista ao lado.</div>';
   const units=planUnits(pl),prods=L.reduce((a,r)=>a+r.qty,0);
   $('#planInfo').textContent=L.length+' produto(s) · '+units+' peça(s)';
   [$('#planSend'),$('#planClear')].forEach(b=>{b.disabled=!L.length});
-  $('#planSide').innerHTML=`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(initials(pl.name))}</span><div><b>${esc(pl.name)}</b><span>${pl.sentAt?'Enviado ao encaixe em '+esc(dt(pl.sentAt)):'Ainda não enviado'}</span></div></div>
+  $('#planSide').innerHTML=`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(initials(pl.name))}</span><div><b>${esc(pl.name)}</b><span class="st-row">${stTag(pl)}</span><span>${pl.sentAt?'Enviado ao encaixe em '+esc(dt(pl.sentAt)):'Ainda não enviado'}</span></div></div>
     <dl class="psum-dl"><div><dt>Produtos</dt><dd>${esc(L.length)}</dd></div><div><dt>Unidades de produto</dt><dd>${esc(prods)}</dd></div><div><dt>Peças no encaixe</dt><dd>${esc(units)}</dd></div></dl>
     ${pl.nestAt?`<div class="plan-saved"><b>Encaixe salvo</b><span>${esc(whenLabel(pl.nestAt))} · ${esc(pl.nestSheets||0)} chapa(s)</span>${pl.nestDef?`<small class="plan-def">${esc(pl.nestDef)}</small>`:''}<button type="button" data-plan-open>Abrir encaixe salvo</button></div>`:''}
+    ${cutPanel(pl)}
     <button type="button" class="pri" data-plan-send ${L.length?'':'disabled'}>Enviar para o encaixe</button>
+    <button type="button" data-plan-dup>Duplicar planejamento</button>
     <div class="msg">Enviar troca as peças da área de encaixe pelas deste planejamento. Depois, em Encaixar, confira chapa, espaço, margem, rotação e tempo.</div>
     <button type="button" class="psum-del" data-del-plan="${esc(pl.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir planejamento</button></div>`}
 function planSave(){autosave();renderPlan()}
@@ -1661,7 +1655,9 @@ $('#planboard').addEventListener('click',e=>{
 function planOpt(k,v){const pl=curPlan();if(!pl)return;pl[k]=v;const mesa=curProj();if(mesa&&mesa.plan===pl.id)mesa[k]=v;planSave()}
 $('#planSeq').onchange=e=>planOpt('seq',e.target.checked);
 $('#planNear').onchange=e=>planOpt('near',e.target.checked);
-$('#planRows').addEventListener('change',e=>{const pl=curPlan(),cl=e.target.closest('[data-plan-color]');if(cl&&pl){const r=planItems(pl).find(x=>x.id===cl.closest('[data-plan-row]').dataset.planRow);if(!r)return;
+const prodRules=pl=>({isolate:planItems(pl).filter(r=>r.rule==='isolate').map(r=>r.id),together:planItems(pl).filter(r=>r.rule==='together').map(r=>r.id)});
+$('#planRows').addEventListener('change',e=>{const pl=curPlan(),cl=e.target.closest('[data-plan-color]');
+  const rl=e.target.closest('[data-plan-rule]');if(rl&&pl){const r=planItems(pl).find(x=>x.id===rl.closest('[data-plan-row]').dataset.planRow);if(r){r.rule=rl.value||undefined;const m=curProj();if(m&&m.plan===pl.id)m.prodRules=prodRules(pl);planSave()}return}if(cl&&pl){const r=planItems(pl).find(x=>x.id===cl.closest('[data-plan-row]').dataset.planRow);if(!r)return;
     const c=cl.value.toLowerCase(),dup=planItems(pl).find(x=>x!==r&&x.color.toLowerCase()===c);
     if(dup){toast('Esta cor já é de '+((prodIdx().find(p=>p.id===dup.id)||{}).name||'outro produto')+' neste planejamento. Escolha outra.','bad');cl.value=r.color;return}
     r.color=cl.value;planSave();return}
@@ -1681,7 +1677,7 @@ async function sendPlan(){const pl=curPlan();if(!pl)return;const L=planItems(pl)
       parts.push({...p,id:++uid,qty:p.qty*r.qty,on:true,mirror:!!p0.mirror,rot:PROD_ROT.some(x=>x[0]===p0.rot)?p0.rot:'auto',gap:p0.gap==null?null:Math.max(0,num(p0.gap,0)),mar:p0.mar==null?null:Math.max(0,num(p0.mar,0)),
         name:pn+' · '+p.name,groupId:'',color:r.color,pick:false,fileId:'',projectId:S.projectId,product:r.id,rank})}}
   S.parts=parts;S.uid=uid;S.files=[];S.links=[];S.res=null;S.snap=null;S.pdf=null;S.savedNest=null;
-  pl.sentAt=new Date().toISOString();const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false}   // nome no relatório/exportação; Salvar encaixe grava neste planejamento
+  pl.sentAt=new Date().toISOString();const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false;mesa.prodRules=prodRules(pl)}   // nome no relatório/exportação; Salvar encaixe grava neste planejamento
   hist('plan.send',{id:pl.id,name:pl.name,products:L.map(r=>({id:r.id,name:(prodIdx().find(p=>p.id===r.id)||{}).name,qty:r.qty})),parts:n});
   render();autosave();showView('encaixe');toast(n+' peça(s) de '+pl.name+' no encaixe. Confira a configuração e clique em Encaixar.','ok')}
 $('#planSend').onclick=()=>sendPlan().catch(e=>toast(e.message,'bad'));
@@ -1697,7 +1693,7 @@ async function openPlanNest(){const pl=curPlan();if(!pl||!pl.nestAt)return;
   S.parts=d.parts.map(p=>({...normPart(p),gap:p.gap==null?null:num(p.gap,0),mar:p.mar==null?null:num(p.mar,0),rank:num(p.rank,0)}));S.uid=Math.max(0,num(d.uid,0),...S.parts.map(p=>p.id));
   S.groups={};for(const k in d.groups||{}){const g=d.groups[k]||{};S.groups[k]={w:num(g.w,3000),h:num(g.h,1250)}}
   S.seq=d.seq||{};S.files=[];S.links=[];S.savedNest=d.nest;S.res=null;S.snap=null;S.pdf=null;
-  const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false}
+  const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false;mesa.prodRules=prodRules(pl)}
   if(!openSavedNest(false)){render();autosave();return}
   render();autosave();showView('encaixe');showResult();toast('Encaixe de '+pl.name+' aberto.','ok')}
 
@@ -1707,7 +1703,7 @@ function simpleTotals(m){const by={};for(const o of m.order){const r=by[o.key]||
   return Object.values(by).map(r=>[r.key,String(r.n),m2txt(r.area),m2txt(r.occ),m2txt(r.area-r.occ),pctxt(r.area?(r.area-r.occ)/r.area*100:null)])}
 function simpleHtml(m){const t=m.totals,loss=t.sheetArea?t.waste/t.sheetArea*100:null;
   let h=`<div class="paper"><h2>Relatório de encaixe${m.plan?' · '+esc(m.plan):''}</h2><table><tbody>`;
-  for(const[a,b]of[['Gerado em',m.whenLabel],['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]])h+=`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`;
+  for(const[a,b]of[['Gerado em',m.whenLabel],...m.pedido,['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]])h+=`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`;
   h+=`</tbody></table><h2>Produtos</h2><table><thead><tr><th>Produto</th><th>Unidades</th><th>Peças</th><th>Chapas</th></tr></thead><tbody>`;
   for(const p of m.products)h+=`<tr><td><i class="sw" style="background:${esc(p.color)}"></i>${esc(p.name)}</td><td>${esc(p.units??'—')}</td><td>${esc(p.pcs)}</td><td>${esc(p.sheets.join(', '))}</td></tr>`;
   h+=`</tbody></table><h2>Chapas (ordem de corte)</h2><table><thead><tr><th>Chapa</th><th>Material</th><th>Medida</th><th>Produtos</th><th>m² chapa</th><th>m² peças</th><th>Perda</th><th>Perda %</th></tr></thead><tbody>`;
@@ -1722,7 +1718,7 @@ function simplePdf(m){const images=[],blocks=[],push=b=>{if(Array.isArray(b))blo
   push(paraBlock('Relatório de encaixe'+(m.plan?' · '+m.plan:''),14,'F2'));
   push(paraBlock('Gerado em '+m.whenLabel,9,'F1'));push(gapBlock(4));
   push(headBlock('Resumo'));
-  push(tableBlocks(['Item','Valor'],[['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]],[180,335]));
+  push(tableBlocks(['Item','Valor'],[...m.pedido,['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]],[180,335]));
   push(headBlock('Produtos'));
   push(legendBlock(m.products.map(p=>({color:p.color,name:p.name,qty:p.units,names:[p.pcs+' peça(s)'],rule:'chapas '+p.sheets.join(', ')})).map(e=>e.qty==null?{...e,qty:'—'}:e)));
   push(headBlock('Chapas (ordem de corte)'));
@@ -1733,3 +1729,53 @@ function simplePdf(m){const images=[],blocks=[],push=b=>{if(Array.isArray(b))blo
   for(const o of m.order){const im=canvasJpeg(drawSheet(o.raw,{w:o.w,h:o.h},o.mar));im.idx=images.length;images.push(im);
     push(imageBlock(im,'Chapa '+o.nn+' · '+o.key+' · perda '+pctxt(o.loss)+' · '+o.products.join(', ')))}
   return paintPages(blocks,images,m.whenLabel)}
+
+/* Módulos opcionais: Usinagem CNC (cam.py + sim.js) e Etiquetas com QR (etiquetas.js) só aparecem quando ativos. */
+async function loadModules(){let m={};try{m=await api('/api/modules')}catch(e){}
+  $('#lblCard').hidden=!m.etiquetas;if(m.etiquetas&&typeof labelsPdf!=='function'){const sc=document.createElement('script');sc.src='/etiquetas.js';document.body.appendChild(sc)}
+  const on=!!m.cnc;document.querySelectorAll('.nav[data-view="cnc"]').forEach(b=>{b.hidden=!on});
+  if(!on){if(mainEl.dataset.view==='cnc')showView('produtos');return}
+  if(!window.CamSim){const sc=document.createElement('script');sc.src='/sim.js';document.body.appendChild(sc)}}
+
+/* Projeto da versão anterior vira produto: mesmas peças (quantidade, giro, espelhamento, material, espessura). */
+async function oldToProduct(pid){const p=S.store.projects.find(x=>x.id===pid);if(!p)return;
+  let d;try{d=await api('/api/project/'+pid)}catch(e){toast(e.message,'bad');return}
+  const parts=(d.parts||[]).map(normPart).filter(q=>!q.guest);if(!parts.length){toast('O projeto '+p.code+' não tem peças.','bad');return}
+  const name=(p.code+' · '+p.product).slice(0,120);
+  if(!await ask('Criar o produto "'+name+'" com as '+parts.length+' peça(s) do projeto antigo?\n\nO projeto continua guardado em data/.','Importar',false))return;
+  await prodFlush();const id=nid('pr'),now=new Date().toISOString();let uid=0;
+  const P=parts.map(q=>({rings:q.rings,w:q.w,h:q.h,A:q.A,holes:q.holes,...(q.pk?{pk:q.pk}:{}),id:++uid,sig:q.sig,qty:q.qty,mirror:!!q.mirror,rot:PROD_ROT.some(r=>r[0]===q.rot)?q.rot:'auto',gap:null,mar:null,mat:q.mat,th:q.th,name:q.name,fileId:q.fileId||''}));
+  try{await api('/api/product/'+id,{name,uid,files:d.files||[],parts:P,createdAt:now})}catch(e){toast(e.message,'bad');return}
+  prodIdx().push({id,name,parts:P.length,units:P.reduce((a,q)=>a+q.qty,0),createdAt:now});autosave();hist('product.from_project',{id,project:pid,name});
+  await openProduct(id);toast('Produto '+name+' criado a partir do projeto antigo.','ok')}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-old]');if(b)oldToProduct(b.dataset.old).catch(x=>toast(x.message,'bad'))});
+
+/* ---------- pedido, status e corte do planejamento ---------- */
+const PLAN_ST=[['planejado','Planejado'],['encaixado','Encaixado'],['em_corte','Em corte'],['cortado','Cortado'],['entregue','Entregue']];
+const planStatus=p=>PLAN_ST.some(x=>x[0]===p.status)?p.status:'planejado';
+const today=()=>new Date().toISOString().slice(0,10);
+const late=p=>!!p.due&&p.due<today()&&planStatus(p)!=='entregue';
+const dueTxt=d=>{const[y,m,dd]=String(d).split('-');return dd&&m?dd+'/'+m+'/'+y:d};
+const stTag=p=>`<span class="st st-${planStatus(p)}">${esc((PLAN_ST.find(x=>x[0]===planStatus(p))||[])[1])}</span>${late(p)?'<span class="st st-atrasado">Atrasado</span>':''}`;
+function cutPanel(pl){const L=pl.cutList||[];if(!L.length)return'';const cut=pl.cut||{},n=L.filter(c=>cut[c.nn]).length;
+  return `<div class="plan-saved"><b>Corte · ${n} de ${L.length} chapa(s)</b><div class="cut-bar"><i style="width:${Math.round(n/L.length*100)}%"></i></div>
+    <div class="cut-list">${L.map(c=>`<label class="f chk"><input type="checkbox" data-cut="${esc(c.nn)}" ${cut[c.nn]?'checked':''}> Chapa ${esc(c.nn)} · ${esc(c.key)} · ${esc(c.products.join(', '))}</label>`).join('')}</div></div>`}
+document.addEventListener('change',e=>{const pl=curPlan();if(!pl)return;
+  const f=e.target.closest('[data-plf]');if(f){pl[f.dataset.plf]=f.value.trim().slice(0,400);if(f.dataset.plf==='status')pl.statusAt=new Date().toISOString();planSave();return}
+  const c=e.target.closest('[data-cut]');if(c){pl.cut=pl.cut||{};if(c.checked)pl.cut[c.dataset.cut]=new Date().toISOString();else delete pl.cut[c.dataset.cut];
+    const L=pl.cutList||[],n=L.filter(x=>pl.cut[x.nn]).length;
+    if(planStatus(pl)!=='entregue')pl.status=n===0?'encaixado':n<L.length?'em_corte':'cortado';hist('plan.cut',{id:pl.id,sheet:c.dataset.cut,cut:c.checked});planSave()}});
+document.addEventListener('click',e=>{const sf=e.target.closest('[data-stf]');if(sf){PL.stf=sf.dataset.stf;renderPlan();return}
+  if(e.target.closest('[data-plan-dup]')){const pl=curPlan();if(!pl)return;
+    const p={id:nid('pl'),name:(pl.name+' (cópia)').slice(0,120),createdAt:new Date().toISOString(),items:planItems(pl).map(r=>({...r})),seq:pl.seq,near:pl.near,client:pl.client,op:'',due:'',notes:pl.notes,status:'planejado'};
+    plans().push(p);PL.id=p.id;hist('plan.create',{id:p.id,name:p.name,from:pl.id});planSave();toast('Planejamento duplicado. Ajuste nome, OP e entrega.','ok');return}
+  if(e.target.closest('[data-prod-dup]'))dupProduct().catch(x=>toast(x.message,'bad'))});
+async function dupProduct(){if(!PR.id)return;await prodFlush();const d=PR.doc,id=nid('pr'),now=new Date().toISOString(),name=(d.name+' (cópia)').slice(0,120);
+  try{await api('/api/product/'+id,{name,uid:d.uid,files:d.files,parts:d.parts,createdAt:now})}catch(e){toast(e.message,'bad');return}
+  prodIdx().push({id,name,parts:d.parts.length,units:d.parts.reduce((a,p)=>a+p.qty,0),createdAt:now});autosave();hist('product.create',{id,name,from:PR.id});
+  await openProduct(id);toast('Produto duplicado.','ok')}
+
+/* Produto e peça de uma peça do encaixe: o nome é "Produto · peça", mas o produto também pode ter "·". */
+function prodPiece(it){const full=String(it.name||''),pn=it.product?((prodIdx().find(x=>x.id===it.product)||{}).name||''):'';
+  if(pn&&full.startsWith(pn+' · '))return{prod:pn,piece:full.slice(pn.length+3)};return{prod:pn,piece:full}}
+
