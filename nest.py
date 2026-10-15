@@ -245,28 +245,29 @@ class Sheet:
                         return False
         return True
 
-    def find(self, m, cap, last=None):
+    def find(self, m, cap, last=None, e=0):
         """Melhor (gx, gy) leftmost; cap limita gx para podar.
 
         last = posição devolvida antes para a mesma máscara nesta chapa: nada à
         esquerda dela (nem abaixo, na mesma coluna) volta a ficar livre."""
         best = None
-        maxx = min(self.W - m.W, cap - 1)
-        if maxx < 0 or self.H < m.H:
+        maxx = min(self.W - m.W - e, cap - 1)
+        if maxx < e or self.H < m.H + 2 * e:
             return None
-        lo = 0
+        ymax = self.H - m.H - e
+        lo = e
         if last:
             gx0, gy0 = last
             if gx0 > maxx:
                 return None
-            for gy in range(gy0, self.H - m.H + 1):
+            for gy in range(max(gy0, e), ymax + 1):
                 if self.fits(m, gx0, gy):
                     return (gx0, gy)
             lo = gx0 + 1
             if lo > maxx:
                 return None
         below = (1 << lo) - 1
-        for gy in range(0, self.H - m.H + 1):
+        for gy in range(e, ymax + 1):
             valid = ((1 << (best[0] if best else maxx + 1)) - 1) & ~below
             if not valid:
                 break
@@ -331,6 +332,25 @@ def _allows(have, gid, rules):
     return True
 
 
+def _mm(v, default):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return float(default)
+    return v if math.isfinite(v) and v >= 0 else float(default)
+
+
+def item_cells(it, opt):
+    """Folga por peça. O encaixe roda com o menor espaço (r0, rb0); a peça com espaço maior
+    ganha células nas duas máscaras, e duas peças ficam sempre a pelo menos o maior dos
+    dois espaços: rb_a + r_b >= max(T_a, T_b). A margem própria vira recuo e da borda."""
+    cs = opt["cs"]
+    t = max(0, math.ceil(_mm(it.get("gap"), opt.get("gap", 0)) / cs - 1e-9))
+    r0, rb0 = opt["r"], opt.get("rb", opt["r"])
+    e = max(0, math.ceil((_mm(it.get("mar"), opt["mar"]) - opt["mar"]) / cs - 1e-9))
+    return max(r0, t - rb0), max(rb0, t - r0), e
+
+
 def radii(gap, cs):
     """Folga em células para garantir `gap` mm reais entre duas peças.
 
@@ -360,8 +380,7 @@ def _cut(halt):
 
 
 def pack(order, g, opt, cache, halt=None):
-    cs, r = opt["cs"], opt["r"]
-    rb = opt.get("rb", r)
+    cs = opt["cs"]
     W = int((g["w"] - 2 * opt["mar"]) // cs)
     H = int((g["h"] - 2 * opt["mar"]) // cs)
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
@@ -373,6 +392,11 @@ def pack(order, g, opt, cache, halt=None):
     # "x": menor avanço no comprimento (clássico). "box": menor retângulo ocupado,
     # que deita peças longas e finas e as empilha em vez de incliná-las.
     box = opt.get("crit") == "box"
+    # planejamento: produtos na ordem da lista (a busca só reordena dentro de cada produto)
+    if opt.get("seq"):
+        order = sorted(order, key=lambda o: o.get("rank", 0))
+    near = bool(opt.get("near"))
+    span = {}
     for idx, it in enumerate(order):
         if _cut(halt):
             # tentativa cortada no meio: o que já está na chapa fica; o resto não entra
@@ -384,8 +408,18 @@ def pack(order, g, opt, cache, halt=None):
             return sheets, fail, why
         gid = str(it.get("gid") or "")
         angs, gene = it["angs"], it.get("gene", 0)
+        r, rb, edge = item_cells(it, opt)
         placed = False
-        for si in range(len(sheets) + 1):
+        n0 = len(sheets)
+        prod = it.get("prod") or ""
+        if near and prod and prod in span:
+            # produto junto: chapas onde ele já está, depois as vizinhas; o resto só se não couber
+            lo, hi = span[prod]
+            tries = [k for k in list(range(lo, hi + 2)) + ([lo - 1] if lo > 0 else []) if k <= n0]
+            tries += [k for k in range(n0 + 1) if k not in tries]
+        else:
+            tries = range(n0 + 1)
+        for si in tries:
             if si == len(sheets):
                 if gid in together and gid in opened:
                     fail.append(it["uid"])
@@ -413,7 +447,7 @@ def pack(order, g, opt, cache, halt=None):
                         rings, w, h = transform(it["rings"], a, mi)
                         c = cache[k] = (Mask(rings, w, h, cs, r), w, h, Mask(rings, w, h, cs, rb) if rb != r else None)
                     m = c[0]
-                    if m.W > W or m.H > H:
+                    if m.W + 2 * edge > W or m.H + 2 * edge > H:
                         continue
                     last = sh.memo.get(k)
                     if last is False:
@@ -422,7 +456,7 @@ def pack(order, g, opt, cache, halt=None):
                         sh.memo[k] = False
                         continue
                     cap = W if box else ((cands[gene][0][0] - m.W + 1) if len(cands) > gene else W)
-                    sp = sh.find(m, cap, last)
+                    sp = sh.find(m, cap, last, edge)
                     if sp is None:
                         if cap >= W:
                             sh.memo[k] = False  # busca completa: não cabe mais nesta chapa
@@ -441,6 +475,9 @@ def pack(order, g, opt, cache, halt=None):
                 sh.gids.add(gid)
                 if gid in together and gid not in opened:
                     opened[gid] = si
+                if prod:
+                    lo, hi = span.get(prod, (si, si))
+                    span[prod] = (min(lo, si), max(hi, si))
                 sh.placed.append(
                     (it["uid"], it["id"], a, mi, opt["mar"] + (sp[0] + r) * cs, opt["mar"] + (sp[1] + r) * cs)
                 )
@@ -527,9 +564,15 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x", halt=None):
     rnd = random.Random(seed)
     t0 = time.time()
     rot = opt["rot"]
-    gap, mar, cs = opt["gap"], opt["mar"], opt["cs"]
     cache_angs = {}
     items = [dict(i, uid=n, gene=0) for n, i in enumerate(items)]
+    # espaço e margem por peça (sem valor próprio, os do encaixe); a grade usa os menores
+    for it in items:
+        it["gap"] = _mm(it.get("gap"), opt["gap"])
+        it["mar"] = _mm(it.get("mar"), opt["mar"])
+    gap = min([opt["gap"]] + [i["gap"] for i in items])
+    mar = min([opt["mar"]] + [i["mar"] for i in items])
+    cs = opt["cs"]
     for it in items:
         it["gid"] = str(it.get("gid") or "")
         k = (it["id"], it.get("rot", "auto"))
@@ -540,7 +583,7 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x", halt=None):
     t1 = seconds * (0.55 if free_any else 0.4)
     cs1 = max(cs, 4.0) if free_any else cs
     rules = opt.get("rules") or {"mix": True, "isolate": [], "together": [], "forbid": []}
-    o1 = {"cs": cs1, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs1)}
+    o1 = {"cs": cs1, "gap": gap, "mar": mar, "rules": rules, "crit": crit, "seq": opt.get("seq"), "near": opt.get("near"), **radii(gap, cs1)}
     if halt is None:
         halt = {"t": time.time() + max(0.0, seconds), "stop": None, "cut": False}
     order, res, sc, it1 = _search(items, g, o1, t1, rnd, halt=halt)
@@ -560,7 +603,7 @@ def nest_group(g, items, opt, seconds, seed=1, crit="x", halt=None):
             if a is not None and free_any and len(it["angs"]) > 4:
                 n["angs"] = sorted(set(refine(a)) | ({0.0, 180.0} if 0.0 in it["angs"] else set()))
             fine.append(n)
-        o2 = {"cs": cs, "gap": gap, "mar": mar, "rules": rules, "crit": crit, **radii(gap, cs)}
+        o2 = {"cs": cs, "gap": gap, "mar": mar, "rules": rules, "crit": crit, "seq": opt.get("seq"), "near": opt.get("near"), **radii(gap, cs)}
         cache2 = {}
         tp = time.time()
         halt["cut"] = False
@@ -661,6 +704,8 @@ def nest_all(payload, pool=None, workers=1, stop_file=None):
         "rot": int(payload.get("rot", 90)),
         "cs": float(payload.get("cs", 2)),
         "rules": _rules(payload),
+        "seq": bool(payload.get("seq")),
+        "near": bool(payload.get("near")),
     }
     total = float(payload.get("seconds", 20))
     want = int(payload.get("workers", 0)) or workers

@@ -7,6 +7,20 @@ const S={parts:[],groups:{},res:null,tab:null,file:'peças',uid:0,sets:[],forbid
 const area=p=>{let a=0;for(let i=0,n=p.length;i<n;i++){const q=p[(i+1)%n];a+=p[i][0]*q[1]-q[0]*p[i][1]}return a/2};
 const bbox=rs=>{let x0=1e18,y0=1e18,x1=-1e18,y1=-1e18;for(const r of rs)for(const[x,y]of r){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0}};
 function pip(pt,poly){let c=false;const[x,y]=pt;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>y)!=(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+/* SPLINE do DXF (NURBS): avalia pelos pontos de controle (de Boor); sem eles, liga os pontos de ajuste. */
+function splinePts(e){const p=+((e.find(x=>x[0]===71)||[0,3])[1]),K=[],C=[],W=[],F=[];let c1=null,f1=null;
+  for(const[c,v]of e){if(c===40)K.push(+v);else if(c===41)W.push(+v);else if(c===10){c1=[+v,0];C.push(c1)}else if(c===20&&c1)c1[1]=+v;else if(c===11){f1=[+v,0];F.push(f1)}else if(c===21&&f1)f1[1]=+v}
+  if(!(p>=1&&C.length>p&&K.length===C.length+p+1))return F;
+  const w=W.length===C.length?W:C.map(()=>1),a=K[p],b=K[C.length],N=Math.max(64,C.length*16),out=[];
+  for(let s=0;s<=N;s++){const u=Math.min(b-1e-12*Math.max(1,Math.abs(b)),a+(b-a)*s/N);let k=p;while(k<C.length-1&&u>=K[k+1])k++;
+    const d=[];for(let j=0;j<=p;j++){const q=C[k-p+j],ww=w[k-p+j];d.push([q[0]*ww,q[1]*ww,ww])}
+    for(let r=1;r<=p;r++)for(let j=p;j>=r;j--){const i=k-p+j,den=K[i+p-r+1]-K[i],al=den?(u-K[i])/den:0;d[j]=d[j].map((x,m)=>(1-al)*d[j-1][m]+al*x)}
+    out.push([d[p][0]/d[p][2],d[p][1]/d[p][2]])}
+  return out}
+function ellipsePts(g){const cx=g(10),cy=g(20),mx=g(11),my=g(21),ra=g(40,1);let t0=g(41,0),t1=g(42,Math.PI*2);if(t1<=t0)t1+=Math.PI*2;
+  const n=Math.max(24,Math.ceil((t1-t0)/(Math.PI*2)*96)),out=[];
+  for(let k=0;k<=n;k++){const t=t0+(t1-t0)*k/n,c=Math.cos(t),s=Math.sin(t);out.push([cx+c*mx-s*ra*my,cy+c*my+s*ra*mx])}
+  return out}
 function arcPts(cx,cy,r,a0,a1,ccw=true){let d=a1-a0;if(ccw){while(d<=0)d+=360}else{while(d>=0)d-=360}
   const n=Math.max(4,Math.ceil(Math.abs(d)/(r>200?2:5)));const o=[];for(let i=0;i<=n;i++){const a=(a0+d*i/n)*Math.PI/180;o.push([cx+r*Math.cos(a),cy+r*Math.sin(a)])}return o}
 function bulgePts(a,b,bu){const dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy);if(!d||!bu)return[a,b];
@@ -24,17 +38,22 @@ function parseDXF(txt,unitSel){
     if(G[i][0]!==0){i++;continue}
     const t=G[i][1];if(t==='ENDSEC'||t==='EOF')break;let j=i+1;const e=[];while(j<G.length&&G[j][0]!==0)e.push(G[j++]);i=j;
     const g=(c,d=0)=>{const f=e.find(x=>x[0]===c);return f?+f[1]:d},lay_=(e.find(x=>x[0]===8)||[0,'0'])[1];
-    const add=(pts)=>{lay[lay_]=(lay[lay_]||0)+1;for(let k=0;k<pts.length-1;k++)segs.push([pts[k],pts[k+1]])};
-    if(t==='LINE'){lay[lay_]=(lay[lay_]||0)+1;segs.push([[g(10),g(20)],[g(11),g(21)]])}
+    const sg=(a,b)=>{const q=[a,b];q.lay=lay_;segs.push(q)},add=(pts)=>{lay[lay_]=(lay[lay_]||0)+1;for(let k=0;k<pts.length-1;k++)sg(pts[k],pts[k+1])};
+    if(t==='LINE'){lay[lay_]=(lay[lay_]||0)+1;sg([g(10),g(20)],[g(11),g(21)])}
     else if(t==='ARC'){add(arcPts(g(10),g(20),g(40),g(50),g(51)))}
-    else if(t==='CIRCLE'){const p=arcPts(g(10),g(20),g(40),0,360);p.pop();lay[lay_]=(lay[lay_]||0)+1;closed.push(p)}
+    else if(t==='CIRCLE'){const p=arcPts(g(10),g(20),g(40),0,360);p.pop();p.lay=lay_;lay[lay_]=(lay[lay_]||0)+1;closed.push(p)}
     else if(t==='LWPOLYLINE'){const v=[];let cur=null;for(const[c,val]of e){if(c===10){cur={p:[+val,0],b:0};v.push(cur)}else if(c===20&&cur)cur.p[1]=+val;else if(c===42&&cur)cur.b=+val}
       const cl=(g(70)&1)===1,pts=[];const n=v.length;for(let k=0;k<(cl?n:n-1);k++){const s=bulgePts(v[k].p,v[(k+1)%n].p,v[k].b);pts.push(...(k?s.slice(1):s))}
-      if(!cl&&!pts.length)continue;lay[lay_]=(lay[lay_]||0)+1;if(cl){pts.pop();closed.push(pts)}else for(let k=0;k<pts.length-1;k++)segs.push([pts[k],pts[k+1]])}
-    else if(['SPLINE','ELLIPSE','INSERT','POLYLINE'].includes(t))geo[t]=(geo[t]||0)+1;
+      if(!cl&&!pts.length)continue;lay[lay_]=(lay[lay_]||0)+1;if(cl){pts.pop();pts.lay=lay_;closed.push(pts)}else for(let k=0;k<pts.length-1;k++)sg(pts[k],pts[k+1])}
+    else if(t==='SPLINE'||t==='ELLIPSE'){const pts=t==='SPLINE'?splinePts(e):ellipsePts(g);
+      if(pts.length<2){geo[t]=(geo[t]||0)+1;continue}lay[lay_]=(lay[lay_]||0)+1;
+      const end=pts[pts.length-1],cl=(t==='SPLINE'&&(g(70)&1)===1)||Math.hypot(pts[0][0]-end[0],pts[0][1]-end[1])<1e-6;
+      if(cl){if(Math.hypot(pts[0][0]-end[0],pts[0][1]-end[1])<1e-6)pts.pop();pts.lay=lay_;closed.push(pts)}else for(let k=0;k<pts.length-1;k++)sg(pts[k],pts[k+1])}
+    else if(['INSERT','POLYLINE'].includes(t))geo[t]=(geo[t]||0)+1;
     else if(['TEXT','MTEXT','DIMENSION','HATCH','POINT'].includes(t))skipped++;
   }
-  return{segs:segs.map(s=>s.map(p=>[p[0]*scale,p[1]*scale])),closed:closed.map(r=>r.map(p=>[p[0]*scale,p[1]*scale])),skipped,geo,scale,lay,unitKnown}}
+  const sc=r=>Object.assign(r.map(p=>[p[0]*scale,p[1]*scale]),{lay:r.lay});
+  return{segs:segs.map(sc),closed:closed.map(sc),skipped,geo,scale,lay,unitKnown}}
 function parseSVG(txt){const d=new DOMParser().parseFromString(txt,'image/svg+xml'),closed=[];
   d.querySelectorAll('path,polygon,polyline,rect,circle').forEach(el=>{const sv=document.createElementNS('http://www.w3.org/2000/svg','svg');sv.style.cssText='position:absolute;visibility:hidden';document.body.appendChild(sv);
     let p=el.cloneNode();sv.appendChild(p);if(!p.getTotalLength){sv.remove();return}
@@ -45,19 +64,25 @@ function chain(segs,tol){
   const ad=(k,i)=>{(M.get(k)||M.set(k,[]).get(k)).push(i)};
   segs.forEach((s,i)=>{ad(K(s[0]),i);ad(K(s[1]),i)});
   const used=new Uint8Array(segs.length),loops=[];let open=0;
-  for(let i=0;i<segs.length;i++){if(used[i])continue;used[i]=1;const pts=[segs[i][0],segs[i][1]];const k0=K(pts[0]);let end=pts[1],ok=false;
+  for(let i=0;i<segs.length;i++){if(used[i])continue;used[i]=1;const pts=[segs[i][0],segs[i][1]];pts.lay=segs[i].lay;const k0=K(pts[0]);let end=pts[1],ok=false;
     for(;;){const ke=K(end);if(ke===k0&&pts.length>2){ok=true;break}
       const c=(M.get(ke)||[]).find(x=>!used[x]);if(c===undefined)break;used[c]=1;const s=segs[c];end=K(s[0])===ke?s[1]:s[0];pts.push(end)}
     if(ok){pts.pop();loops.push(pts)}else open++}
   return{loops,open}}
+/* Camadas do CAD no padrão Aspire/Alphacam: REBAIXO_5 (ou POCKET_5) = rebaixo de 5 mm; FURO_10 = furo cego de 10 mm. */
+const PK_LAYER=/^(REBAIXO|POCKET|FURO)[_\- ]?(\d+(?:[.,]\d+)?)/i;
 function makeParts(rings,name){
+  const pk=[];
+  rings=rings.filter(r=>{const m=PK_LAYER.exec(r.lay||'');if(m&&r.length>2){pk.push({r,d:+m[2].replace(',','.'),k:/^furo/i.test(m[1])?'furo':'rebaixo'});return false}return true});
   rings=rings.filter(r=>r.length>2&&Math.abs(area(r))>1e-3).sort((a,b)=>Math.abs(area(b))-Math.abs(area(a)));
   const depth=rings.map((r,i)=>{const pt=[(r[0][0]+r[1][0])/2,(r[0][1]+r[1][1])/2];let d=0;for(let j=0;j<i;j++)if(pip(pt,rings[j]))d++;return d});
   const out=[];
   rings.forEach((r,i)=>{if(depth[i]%2===0)out.push({rings:[r],o:i});else{let best=-1;for(let j=i-1;j>=0;j--)if(depth[j]===depth[i]-1&&pip([(r[0][0]+r[1][0])/2,(r[0][1]+r[1][1])/2],rings[j])){best=j;break}
     const p=out.find(x=>x.o===best);if(p)p.rings.push(r)}});
-  return out.map(p=>{const b=bbox([p.rings[0]]),rs=p.rings.map(r=>r.map(q=>[q[0]-b.x0,q[1]-b.y0]));
-    const A=Math.abs(area(rs[0]))-rs.slice(1).reduce((s,r)=>s+Math.abs(area(r)),0);return{rings:rs,w:b.w,h:b.h,A,holes:rs.length-1}})}
+  return out.map(p=>{const b=bbox([p.rings[0]]),mv=r=>r.map(q=>[q[0]-b.x0,q[1]-b.y0]),rs=p.rings.map(mv);
+    const mine=pk.filter(x=>!x.used&&pip(x.r[0],p.rings[0])&&!p.rings.slice(1).some(h=>pip(x.r[0],h)));mine.forEach(x=>{x.used=1});
+    const A=Math.abs(area(rs[0]))-rs.slice(1).reduce((s,r)=>s+Math.abs(area(r)),0);
+    return{rings:rs,w:b.w,h:b.h,A,holes:rs.length-1,...(mine.length?{pk:mine.map(x=>({r:mv(x.r),d:x.d,k:x.k}))}:{})}})}
 function addParts(list,mat,th,merge,x={}){
   for(const p of list){const sig=[Math.round(p.A/4),Math.round(Math.max(p.w,p.h)),Math.round(Math.min(p.w,p.h)),p.holes].join('|');
     const ex=merge&&S.parts.find(q=>q.sig===sig&&q.mat===mat&&q.th===th&&q.fileId===x.fileId);if(ex){ex.qty++;continue}
@@ -74,7 +99,7 @@ const OFF='O servidor local está desligado. Abra o iniciar.bat (ou rode python 
 async function sfetch(url,opt){try{return await fetch(url,opt)}catch(e){setSaved('servidor desligado','bad');throw Error(OFF)}}
 async function api(path,body){const r=await sfetch(path,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});if(!r.ok){const e=Error(await r.text());e.status=r.status;throw e}return r.json()}
 function hist(kind,detail){api('/api/history',{kind,detail,project:S.projectId||''}).catch(()=>{})}
-const metaPatch=()=>({projects:S.store.projects,models:S.sets,presets:S.store.presets,settings:{...S.store.settings,forbid:S.forbid,mix:$('#mix').checked}});
+const metaPatch=()=>({projects:S.store.projects,products:S.store.products||[],plans:S.store.plans||[],models:S.sets,presets:S.store.presets,settings:{...S.store.settings,forbid:S.forbid,mix:$('#mix').checked}});
 const projPayload=()=>({uid:S.uid,seq:S.seq,files:S.files,groups:S.groups,setQty:S.setQty,nest:S.savedNest,...(S.links.length?{links:S.links}:{}),parts:S.parts.filter(p=>!p.guest).map(({pick,guest,...p})=>p)});
 function autosave(){if(!S.ready)return;clearTimeout(saveT);saveT=setTimeout(()=>flush(),700);setSaved('gravando…')}
 /* Uma gravação por vez: quem chega durante uma espera por ela e grava de novo se ainda houver diferença (senão o rev do servidor dá 409). */
@@ -103,10 +128,8 @@ window.addEventListener('pagehide',()=>{const d=pending();if(!d)return;
 /* ---------- projetos ---------- */
 const curProj=()=>S.store.projects.find(p=>p.id===S.projectId)||null;
 const fileName=id=>{const f=S.files.find(x=>x.id===id);return f?f.name:''};
-function renderProj(){const L=S.store.projects;
-  $('#proj').innerHTML=L.length?L.map(p=>`<option value="${esc(p.id)}" ${p.id===S.projectId?'selected':''}>${esc(p.code)} · ${esc(p.product)}</option>`).join(''):'<option value="">Nenhum projeto</option>';
-  const p=curProj();$('#projInfo').textContent=p?[p.order&&'OP '+p.order,p.lot&&'lote '+p.lot].filter(Boolean).join(' · '):'';
-  $('#drop').classList.toggle('off',!p);renderProjList()}
+function renderProj(){const p=curProj();$('#projInfo').textContent='';$('#drop').classList.toggle('off',!p);
+  const n=S.links.length;$('#linkTag').hidden=!n;$('#linkTag').textContent=n?'+ '+S.links.map(l=>projCode(l.id)).join(' + '):''}
 /* O arquivo do projeto é dado externo: números das peças viram números de verdade antes de chegar ao HTML. */
 const num=(v,d)=>{const n=typeof v==='number'||typeof v==='string'&&v.trim()?+v:NaN;return Number.isFinite(n)?n:d};
 const normPart=p=>({...p,id:num(p.id,0),qty:Math.max(1,Math.round(num(p.qty,1))),th:num(p.th,0)>0?num(p.th,1):1,w:Math.max(0,num(p.w,0)),h:Math.max(0,num(p.h,0)),A:num(p.A,0),holes:Math.max(0,Math.round(num(p.holes,0))),mat:String(p.mat??''),name:String(p.name??''),pick:false});
@@ -122,7 +145,6 @@ async function openProject(id){
   S.res=null;S.snap=null;S.pdf=null;S.tab=null;
   if(S.store.settings.last!==id){S.store.settings.last=id;autosave()}
   renderProj();render();if(S.savedNest&&openSavedNest(true))render()}
-$('#proj').onchange=e=>openProject(e.target.value).catch(x=>toast(x.message,'bad'));
 /* ---------- encaixe conjunto: peças de outros projetos entram só para o cálculo ---------- */
 /* As peças de um projeto juntado continuam gravadas no projeto de origem. Aqui são cópias só de leitura,
    com o id deslocado (base × 1e6) para não colidir com as do projeto aberto; o projeto aberto guarda apenas a lista `links`. */
@@ -140,60 +162,6 @@ async function linkProject(id,on){
   else S.links=S.links.filter(l=>l.id!==id);
   await loadGuests();S.res=null;S.snap=null;S.pdf=null;renderProj();render();
   status(on?'Peças de '+projCode(id)+' juntadas ao encaixe. Encaixe de novo.':'Peças de '+projCode(id)+' retiradas do encaixe.',false)}
-function renderProjList(){
-  const q=($('#projFilter').value||'').trim().toLowerCase(),L=S.store.projects.filter(p=>!q||[p.code,p.product,p.order,p.lot].join(' ').toLowerCase().includes(q));
-  const dt=v=>{const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('pt-BR')};
-  // o projeto aberto vem primeiro; os outros na ordem de criação, do mais novo ao mais antigo
-  const ord=[...L].sort((a,b)=>(b.id===S.projectId)-(a.id===S.projectId)||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  $('#projList').innerHTML=ord.map((p,k)=>{const cur=p.id===S.projectId,lk=S.links.some(l=>l.id===p.id),meta=[p.order&&'OP '+p.order,p.lot&&'Lote '+p.lot].filter(Boolean).join(' · ');
-    return `<article class="pcard${cur?' on':''}${lk?' lk':''}" style="--i:${k}">
-      <button type="button" class="pcard-open" data-open="${esc(p.id)}" ${cur?'aria-current="true"':''} aria-label="Abrir projeto ${esc(p.code)}">
-        <span class="pcard-mark" aria-hidden="true">${esc(String(p.code||'?').slice(0,2).toUpperCase())}</span>
-        <span class="pcard-txt"><b>${esc(p.code)}</b><span>${esc(p.product)}</span></span></button>
-      <div class="pcard-meta">${meta?`<span>${esc(meta)}</span>`:''}${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}</div>
-      <div class="pcard-foot">${cur?'<span class="tag on">Aberto</span><span class="pcard-hint">Projeto em uso</span>':`<label class="pcard-link"><input type="checkbox" data-link="${esc(p.id)}" ${lk?'checked':''} ${S.projectId?'':'disabled'}> Juntar ao encaixe</label><span class="pcard-hint">Abrir →</span>`}<button type="button" class="icon pcard-del" data-del-proj="${esc(p.id)}" aria-label="Excluir projeto ${esc(p.code)}" title="Excluir projeto"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`}).join('')||
-    `<div class="board-empty">${S.store.projects.length?'Nenhum projeto com esse texto.':'<b>Nenhum projeto ainda.</b>Crie o primeiro para importar peças e encaixar.<button type="button" class="pri" data-new-proj>Novo projeto</button>'}</div>`;
-  $('#pjCount').textContent=S.store.projects.length?S.store.projects.length+' no total':'';
-  // resumo do projeto aberto, no painel
-  const cp=curProj(),own=S.parts.filter(x=>!x.guest),un=own.reduce((a,x)=>a+(x.on?x.qty:0),0);
-  $('#projSummary').innerHTML=cp?`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(String(cp.code||'?').slice(0,2).toUpperCase())}</span><div><b>${esc(cp.code)}</b><span>${esc(cp.product)}</span></div></div>
-      <dl class="psum-dl"><div><dt>Peças</dt><dd>${esc(own.length)}</dd></div><div><dt>Unidades</dt><dd>${esc(un)}</dd></div><div><dt>Arquivos</dt><dd>${esc(S.files.length)}</dd></div><div><dt>Modelos</dt><dd>${esc(new Set(own.map(x=>x.groupId).filter(Boolean)).size)}</dd></div>
-      ${cp.order?`<div><dt>OP</dt><dd>${esc(cp.order)}</dd></div>`:''}${cp.lot?`<div><dt>Lote</dt><dd>${esc(cp.lot)}</dd></div>`:''}${cp.createdAt?`<div><dt>Criado</dt><dd>${esc(dt(cp.createdAt))}</dd></div>`:''}</dl>
-      <div class="btns"><button type="button" data-goto="import">Importar arquivos</button><button type="button" class="pri" data-goto="pecas">Ver peças</button></div>
-      <button type="button" class="psum-del" data-del-proj="${esc(cp.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir projeto</button>
-      ${S.links.length?`<div class="psum-links"><b>Juntados ao encaixe</b>${S.links.map(l=>`<span class="tag inf">${esc(projCode(l.id))}</span>`).join('')}</div>`:''}</div>`
-    :'<div class="msg">Nenhum projeto aberto. Escolha um no quadro ou crie um novo.</div>';
-  const n=S.links.length;
-  $('#linkInfo').textContent=n?'Encaixe conjunto: '+[projCode(S.projectId),...S.links.map(l=>projCode(l.id))].join(' + ')+'. Chapas, exportação e relatório ficam no projeto aberto.':'';
-  $('#linkTag').hidden=!n;$('#linkTag').textContent=n?'+ '+S.links.map(l=>projCode(l.id)).join(' + '):''}
-$('#projList').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b&&b.dataset.open!==S.projectId)openProject(b.dataset.open).catch(x=>toast(x.message,'bad'))});
-$('#projList').addEventListener('change',e=>{const t=e.target;if(t.dataset.link)linkProject(t.dataset.link,t.checked).catch(x=>toast(x.message,'bad'))});
-$('#projFilter').addEventListener('input',renderProjList);
-$('#projList').addEventListener('click',e=>{if(e.target.closest('[data-new-proj]'))openProjModal()});
-/* Excluir projeto: sai da lista; o arquivo fica em data/ marcado como excluído, recuperável à mão. */
-async function deleteProject(id){
-  const p=S.store.projects.find(x=>x.id===id);if(!p)return;
-  const cur=id===S.projectId,n=cur?S.parts.filter(x=>!x.guest).length:0;
-  if(!await ask('Excluir o projeto "'+p.code+' · '+p.product+'"'+(cur?' ('+n+' peça(s))':'')+'?\n\nEle sai da lista com as peças e o encaixe salvo. O arquivo fica guardado na pasta data/ marcado como excluído e pode ser recuperado depois.','Excluir projeto',true))return;
-  try{await api('/api/project/'+id+'/delete',{})}catch(e){toast(e.message,'bad');return}
-  if(S.links.some(l=>l.id===id))await linkProject(id,false);
-  S.store.projects=S.store.projects.filter(x=>x.id!==id);hist('project.delete',{id,code:p.code,product:p.product});
-  // excluindo o aberto: nada dele pode ser gravado de novo (recriaria o arquivo); abre o próximo da lista
-  if(cur){clearTimeout(saveT);S.projectId=null;S.parts=[];S.files=[];S.savedNest=null;S.links=[];sent.proj='';const nx=S.store.projects[0];await openProject(nx?nx.id:null)}
-  else{renderProj();autosave()}
-  toast('Projeto '+p.code+' excluído.','ok')}
-document.addEventListener('click',e=>{const b=e.target.closest('[data-del-proj]');if(b)deleteProject(b.dataset.delProj).catch(x=>toast(x.message,'bad'))});
-$('#projSummary').addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)showView(b.dataset.goto)});
-$('#projNew2').onclick=openProjModal;
-function openProjModal(){['pjCode','pjProd','pjOrd','pjLot'].forEach(i=>$('#'+i).value='');$('#pjErr').textContent='';showModal('projModal','#pjCode')}
-$('#projNew').onclick=openProjModal;$('#pjNo').onclick=()=>hideModal('projModal');
-$('#pjOk').onclick=async()=>{
-  const code=$('#pjCode').value.trim(),product=$('#pjProd').value.trim();
-  if(!code||!product){$('#pjErr').textContent='Informe o código e o produto.';return}
-  if(S.store.projects.some(p=>p.code.toLowerCase()===code.toLowerCase())){$('#pjErr').textContent='Já existe um projeto com este código.';return}
-  const p={id:nid('pj'),code,product,order:$('#pjOrd').value.trim(),lot:$('#pjLot').value.trim(),createdAt:new Date().toISOString(),status:'aberto',notes:''};
-  S.store.projects.push(p);hideModal('projModal');await flush();hist('project.create',{id:p.id,code,product});await openProject(p.id);toast('Projeto criado.','ok')};
-
 /* ---------- importação em lote com revisão ---------- */
 const sha256=async buf=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');
 const thFromName=n=>{const m=n.match(/(\d+(?:[.,]\d+)?)\s*mm/i);return m?+m[1].replace(',','.'):null};
@@ -217,9 +185,9 @@ async function analyze(f){
   const th=thFromName(f.name);
   row.mat=$('#defMat').value||'Material';row.matSrc='padrão';
   row.th=th||+$('#defTh').value||1;row.thSrc=th?'inferida do nome':'padrão';
-  const same=S.files.find(x=>x.hash===row.hash);
+  const known=IMP_TARGET==='product'&&PR.doc?PR.doc.files:S.files,same=known.find(x=>x.hash===row.hash);
   if(same&&row.hash){row.dup=same.name;row.include=false}
-  else if(S.files.some(x=>x.name===f.name))row.warn.push('mesmo nome de um arquivo já importado, conteúdo diferente');
+  else if(known.some(x=>x.name===f.name))row.warn.push('mesmo nome de um arquivo já importado, conteúdo diferente');
   if(row.err)row.include=false;
   return row}
 let IMP=null;
@@ -247,8 +215,9 @@ function impRender(){
         <label class="f"><span class="imp-lb">Espessura ${src(r.thSrc)}</span>${thField(r.mat,r.th,'data-k="th"')}</label>
         <label class="f"><span class="imp-lb">Modelo${r.model?'':' <span class="tag pend">pendente</span>'}</span><select data-k="model"><option value="">Sem modelo</option>${mods.replace(`value="${esc(r.model)}"`,`value="${esc(r.model)}" selected`)}</select></label>
       </div></div>`}).join('');
-  const n=IMP.rows.filter(r=>r.include).length,p=curProj();
-  $('#impHead').textContent=`Destino: ${p.code} · ${p.product}. ${n} de ${IMP.rows.length} arquivo(s) serão importados.`;$('#impOk').disabled=!n}
+  const n=IMP.rows.filter(r=>r.include).length,p=curProj(),dest=IMP_TARGET==='product'&&PR.doc?'produto '+PR.doc.name:'área de encaixe';
+  $('#impModal').classList.toggle('prod',IMP_TARGET==='product');
+  $('#impHead').textContent=`Destino: ${dest}. ${n} de ${IMP.rows.length} arquivo(s) serão importados.`;$('#impOk').disabled=!n}
 /* Espessura da barra em lote: dentro das do material escolhido. */
 function fitBulk(){const B=IMP.bulk,ts=presetThicknesses(B.mat);if(ts.length&&!ts.includes(+B.th))B.th=ts[0]}
 $('#impBody').addEventListener('click',e=>{if(!IMP||!e.target.closest('[data-bulk-apply]'))return;
@@ -267,8 +236,9 @@ $('#impOk').onclick=async()=>{
   const use=IMP.rows.filter(r=>r.include&&!r.err);
   const bad=use.find(r=>!(r.th>0)||!r.mat.trim());if(bad){toast('Informe material e espessura válidos em '+bad.name+'.','bad');return}
   const part=use.filter(r=>r.geo);
-  if(part.length&&!await ask('Parte do desenho não foi lida e as peças podem sair incompletas (sem um furo ou um contorno):\n'+part.map(r=>'• '+r.name+': '+r.geo).join('\n')+'\n\nNo CAD, exploda os blocos e converta splines/elipses em polilinhas antes de exportar o DXF. Importar mesmo assim?','Importar mesmo assim',true))return;
+  if(part.length&&!await ask('Parte do desenho não foi lida e as peças podem sair incompletas (sem um furo ou um contorno):\n'+part.map(r=>'• '+r.name+': '+r.geo).join('\n')+'\n\nNo CAD, exploda os blocos (INSERT) e converta POLYLINE 3D em polilinhas antes de exportar o DXF. Importar mesmo assim?','Importar mesmo assim',true))return;
   if(!IMP)return;
+  if(IMP_TARGET==='product'){prodCommit(use,part);return}
   const done=[];
   for(const r of use){const id=nid('f'),before=S.parts.length;
     addParts(r.parts,r.mat.trim(),r.th,true,{fileId:id,groupId:r.model,thSrc:r.thSrc,matSrc:r.matSrc,stem:r.name.replace(/\.\w+$/,'')});
@@ -282,7 +252,8 @@ $('#impOk').onclick=async()=>{
   hist('import',{files:done,unread:part.map(r=>({name:r.name,entities:r.geo}))});S.res=null;S.snap=null;S.pdf=null;render();flush()};
 async function startImport(files){files=[...files];if(!files.length)return;
   if(!S.ready){toast('Servidor indisponível: não é possível gravar a importação.','bad');return}
-  if(!S.projectId){toast('Crie ou escolha um projeto antes de importar.','bad');openProjModal();return}
+  if(!S.projectId){toast('Área de encaixe indisponível.','bad');return}
+  IMP_TARGET='project';
   $('#imsg').className='msg';$('#imsg').textContent='Lendo '+files.length+' arquivo(s)…';
   const rows=[];for(const f of files)rows.push(await analyze(f));
   const seen=new Map();rows.forEach(r=>{if(r.hash&&seen.has(r.hash)&&!r.dup){r.dup=seen.get(r.hash)+' (neste lote)';r.include=false}else if(r.hash)seen.set(r.hash,r.name)});
@@ -313,8 +284,8 @@ function mask(rings,w,h,cs,r){
   const runs=[];for(let y=0;y<H;y++){let x=0;while(x<W){if(m[y*W+x]){let s=x;while(x<W&&m[y*W+x])x++;runs.push([y,s,x])}else x++}}
   return{W,H,runs}}
 const fits=(sh,m,gx,gy)=>{const{W,occ}=sh;for(const[y,a,b]of m.runs){const o=(gy+y)*W+gx;for(let x=a;x<b;x++)if(occ[o+x])return false}return true};
-function findSpot(sh,m,cap){
-  for(let gx=0;gx<=Math.min(sh.W-m.W,cap);gx+=1)for(let gy=0;gy<=sh.H-m.H;gy+=1)if(fits(sh,m,gx,gy))return[gx,gy];return null}
+function findSpot(sh,m,cap,e=0){
+  for(let gx=e;gx<=Math.min(sh.W-m.W-e,cap);gx+=1)for(let gy=e;gy<=sh.H-m.H-e;gy+=1)if(fits(sh,m,gx,gy))return[gx,gy];return null}
 function currentRules(){
   return {
     mix:$('#mix').checked,
@@ -334,19 +305,29 @@ function sheetAllows(have,gid,rules){
   for(const pair of forbid){const a=pair[0],b=pair[1];if((gid===a&&have.has(b))||(gid===b&&have.has(a)))return false}
   return true;
 }
+/* Espaço e margem por peça (vazio = do encaixe). A grade usa os menores; a peça com espaço maior ganha
+   folga própria (r_a + r_b >= o maior dos dois) e a margem própria vira recuo e da borda, como nos motores do servidor. */
+const ownMm=(v,d)=>v==null||v===''||!Number.isFinite(+v)||+v<0?d:+v;
 function nestGroup(g,items,o,order){
-  const cs=o.cs,r=Math.ceil(o.gap/2/cs),W=Math.floor((g.w-2*o.mar)/cs),H=Math.floor((g.h-2*o.mar)/cs),sheets=[],fail=[],failWhy=[];
+  const gmin=Math.min(o.gap,...items.map(i=>ownMm(i.gap,o.gap))),mmin=Math.min(o.mar,...items.map(i=>ownMm(i.mar,o.mar)));
+  const cs=o.cs,r=Math.ceil(gmin/2/cs),W=Math.floor((g.w-2*mmin)/cs),H=Math.floor((g.h-2*mmin)/cs),sheets=[],fail=[],failWhy=[];
+  const rOf=it=>Math.max(r,Math.ceil(ownMm(it.gap,o.gap)/cs-1e-9)-r),eOf=it=>Math.max(0,Math.ceil((ownMm(it.mar,o.mar)-mmin)/cs-1e-9));
   if(W<1||H<1) return {sheets,fail:order.slice(),failWhy:order.map(()=>'tamanho')};
   const rules=o.rules||{mix:true,isolate:[],together:[],forbid:[]};
   const together=new Set(rules.together||[]), opened=new Map();
-  const cache=new Map(),mk=(it,a,mi)=>{const k=it.id+'|'+a+'|'+mi;if(!cache.has(k)){const t=tf(it.rings,a,mi);cache.set(k,{...t,m:mask(o.fill===false?[t.rings[0]]:t.rings,t.w,t.h,cs,r)})}return cache.get(k)};
+  const cache=new Map(),mk=(it,a,mi)=>{const k=it.id+'|'+a+'|'+mi;if(!cache.has(k)){const t=tf(it.rings,a,mi);cache.set(k,{...t,m:mask(o.fill===false?[t.rings[0]]:t.rings,t.w,t.h,cs,rOf(it))})}return cache.get(k)};
   /* Igual a nest.py angle_set: o giro da peça manda; 'auto' usa o global. shortcut: 'free' sem os ângulos do casco, só passo de 15°. */
   const angsOf=it=>{const md=it.rot;if(md==='0')return[0];if(md==='180')return[0,180];if(md==='90')return[0,90,180,270];
     const free=md==='free'||o.rot===-1,st=free?15:o.rot,a=[];if(st>0)for(let x=0;x<360;x+=st)a.push(x);else a.push(0);return a};
+  // planejamento: produtos na ordem da lista (seq) e cada produto na mesma chapa ou nas vizinhas (near)
+  if(o.seq)order=[...order].sort((a,b)=>(a.rank||0)-(b.rank||0));
+  const span=new Map();
   for(const it of order){
     const gid=it.groupId||'';
-    let put=false;
-    for(let si=0;si<=sheets.length&&!put;si++){
+    let put=false;const n0=sheets.length,sp0=o.near&&it.product?span.get(it.product):null;
+    let tries=[...Array(n0+1).keys()];
+    if(sp0){const pref=[];for(let k=sp0[0];k<=sp0[1]+1;k++)pref.push(k);if(sp0[0]>0)pref.push(sp0[0]-1);tries=[...pref.filter(k=>k<=n0),...tries.filter(k=>!pref.includes(k))]}
+    for(const si of tries){if(put)break;
       if(si===sheets.length){
         if(together.has(gid)&&opened.has(gid)){fail.push(it);failWhy.push('junto');put=true;break}
         sheets.push({W,H,occ:new Uint8Array(W*H),placed:[],gids:new Set()});
@@ -357,12 +338,13 @@ function nestGroup(g,items,o,order){
         if(si===sheets.length-1&&sh.placed.length===0){sheets.pop();fail.push(it);failWhy.push('tamanho');put=true}
         continue;
       }
-      let best=null;
-      for(const a of angsOf(it))for(const mi of it.mirror?[0,1]:[0]){const c=mk(it,a,mi);if(c.m.W>W||c.m.H>H)continue;const sp=findSpot(sh,c.m,best?Math.ceil(best.sc/1e5)-c.m.W:1e9);if(!sp)continue;
+      let best=null;const ri=rOf(it),e=eOf(it);
+      for(const a of angsOf(it))for(const mi of it.mirror?[0,1]:[0]){const c=mk(it,a,mi);if(c.m.W+2*e>W||c.m.H+2*e>H)continue;const sp=findSpot(sh,c.m,best?Math.ceil(best.sc/1e5)-c.m.W:1e9,e);if(!sp)continue;
         const sc=(sp[0]+c.m.W)*1e5+sp[1];if(!best||sc<best.sc)best={sc,a,mi,c,sp}}
       if(best){const{c,sp}=best;for(const[y,x0,x1]of c.m.runs)sh.occ.fill(1,(sp[1]+y)*W+sp[0]+x0,(sp[1]+y)*W+sp[0]+x1);
-        sh.placed.push({it,rings:c.rings,x:o.mar+(sp[0]+r)*cs,y:o.mar+(sp[1]+r)*cs,w:c.w,h:c.h,a:best.a,mi:best.mi});
-        sh.gids.add(gid);if(together.has(gid)&&!opened.has(gid))opened.set(gid,si);put=true}
+        sh.placed.push({it,rings:c.rings,x:mmin+(sp[0]+ri)*cs,y:mmin+(sp[1]+ri)*cs,w:c.w,h:c.h,a:best.a,mi:best.mi});
+        sh.gids.add(gid);if(together.has(gid)&&!opened.has(gid))opened.set(gid,si);put=true;
+        if(it.product){const q=span.get(it.product)||[si,si];span.set(it.product,[Math.min(q[0],si),Math.max(q[1],si)])}}
       else if(si===sheets.length-1&&sh.placed.length===0){sheets.pop();fail.push(it);failWhy.push('tamanho');put=true}
     }
     if(!put){fail.push(it);failWhy.push('tamanho')}
@@ -399,7 +381,7 @@ function cancelNest(){if(!NEST.busy)return;NEST.run++;NEST.busy=false;
   JOB=null;progHide();$('#go').disabled=false;$('#nmsg').className='msg w';$('#nmsg').textContent='Encaixe interrompido: o projeto mudou.'}
 async function serverNest(o,run){
   const G=groupsOf(),groups={},byId={},secs=+$('#secs').value,nGroups=Object.keys(G).length;
-  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||''})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
+  for(const k in G){const items=[];G[k].forEach(p=>{byId[p.id]=p;for(let i=0;i<p.qty;i++)items.push({id:p.id,rings:o.fill===false?[p.rings[0]]:p.rings,area:p.A,mirror:p.mirror,rot:p.rot,gid:p.groupId||'',...(p.gap!=null?{gap:p.gap}:{}),...(p.mar!=null?{mar:p.mar}:{}),...(p.product?{prod:p.product,rank:p.rank||0}:{})})});groups[k]={w:S.groups[k].w,h:S.groups[k].h,items}}
   const r=await sfetch('/api/nest/start',{method:'POST',body:JSON.stringify({...o,seconds:secs,groups})});
   if(!r.ok)throw Error(await r.text());
   const id=(await r.json()).id;
@@ -423,7 +405,7 @@ async function serverNest(o,run){
 function takeSnap(o,engine){
   const vals=S.res?Object.values(S.res):[];
   S.snap={
-    opt:{gap:o.gap,mar:o.mar,rot:o.rot,cs:o.cs,secs:+$('#secs').value},
+    opt:{gap:o.gap,mar:o.mar,rot:o.rot,cs:o.cs,secs:+$('#secs').value,fill:o.fill!==false,seq:!!o.seq,near:!!o.near,srv:$('#srv').checked},
     askedCs:+$('#res').value,
     rotLabel:$('#rot').selectedOptions[0]?$('#rot').selectedOptions[0].textContent:'',
     rules:currentRules(),
@@ -442,27 +424,41 @@ function packNest(){const o={};for(const k in S.res){const g=S.res[k];o[k]={shee
 function unpackNest(R){const byId=new Map(S.parts.map(p=>[p.id,p])),need=id=>{const it=byId.get(id);if(!it)throw Error('peça ausente');return it},o={};
   for(const k in R){const g=R[k];o[k]={sheets:g.sheets.map(sh=>({placed:sh.map(q=>{const it=need(q.id),t=tf(it.rings,q.a,q.mi);return{it,rings:t.rings,w:t.w,h:t.h,x:q.x,y:q.y,a:q.a,mi:q.mi}})})),fail:g.fail.map(need),failWhy:g.failWhy||[],ext:g.ext||undefined,workers:g.workers||undefined,iters:g.iters||0}}
   return o}
+/* Definição de encaixe guardada com o encaixe salvo: volta para os campos de Encaixar ao abrir. */
+function applySnap(sn){if(!sn||!sn.opt)return;const o=sn.opt;
+  presetParams({rot:o.rot,res:sn.askedCs||o.cs,secs:o.secs,gap:o.gap,mar:o.mar,fill:o.fill});
+  if(sn.rules)$('#mix').checked=sn.rules.mix!==false;if(o.srv!=null)$('#srv').checked=!!o.srv;
+  const m=curProj();if(m&&o.seq!=null){m.seq=!!o.seq;m.near=!!o.near}
+  for(const k in sn.groups||{}){const g=sn.groups[k];if(g&&+g.w>0&&+g.h>0){S.groups[k]={w:+g.w,h:+g.h};S.sheetMemory&&(S.sheetMemory[k]={w:+g.w,h:+g.h})}}}
+function snapText(sn){if(!sn||!sn.opt)return'';const o=sn.opt,t=v=>v>=60?(v/60)+' min':v+' s';
+  return['Espaço '+o.gap+' mm','margem '+o.mar+' mm',sn.rotLabel||('giro '+o.rot),'resolução '+(sn.askedCs||o.cs)+' mm','tempo '+t(o.secs),o.fill===false?'sem encaixe nos furos':'encaixe nos furos',
+    o.seq?'ordem da lista':'',o.near?'produtos juntos':'',...Object.entries(sn.groups||{}).map(([k,g])=>k+' '+g.w+'×'+g.h)].filter(Boolean).join(' · ')}
 const savedNestStale=()=>!!S.savedNest&&S.savedNest.sig!==nestSig();
 function openSavedNest(quiet){
   const n=S.savedNest;if(!n)return false;
   if(savedNestStale()){if(!quiet)status('As peças ou as chapas mudaram depois que este encaixe foi salvo. Encaixe de novo e salve.',true);return false}
   try{S.res=unpackNest(n.res)}catch(e){S.res=null;if(!quiet)status('Não foi possível abrir o encaixe salvo.',true);return false}
-  S.snap=JSON.parse(JSON.stringify(n.snap));S.tab=S.res[n.tab]?n.tab:Object.keys(S.res)[0];S.pdf=null;
+  S.snap=JSON.parse(JSON.stringify(n.snap));S.tab=S.res[n.tab]?n.tab:Object.keys(S.res)[0];S.pdf=null;applySnap(S.snap);
   $('#nmsg').className='msg ok';$('#nmsg').textContent='Encaixe salvo em '+whenLabel(n.savedAt)+' aberto.';
   return true}
 $('#nestOpen').onclick=()=>{if(openSavedNest(false)){render();showResult()}};
 $('#nestSave').onclick=async()=>{
   if(!S.res||!S.snap){status('Encaixe antes de salvar.',true);return}
   if(!S.projectId){status('Selecione um projeto.',true);return}
-  if(S.savedNest&&!await ask('Este projeto já tem um encaixe salvo em '+whenLabel(S.savedNest.savedAt)+'. Substituir por este?','Substituir',false))return;
+  {const pl=plans().find(p=>p.id===(curProj()||{}).plan),at=pl?pl.nestAt:S.savedNest&&S.savedNest.savedAt;
+   if(at&&!await ask((pl?'O planejamento '+pl.name:'A área de encaixe')+' já tem um encaixe salvo em '+whenLabel(at)+'. Substituir por este?','Substituir',false))return}
   const sheets=Object.values(S.res).reduce((a,g)=>a+g.sheets.length,0);
   S.savedNest={savedAt:new Date().toISOString(),sig:nestSig(),tab:S.tab,sheets,snap:JSON.parse(JSON.stringify(S.snap)),res:packNest()};
-  hist('nest.save',{sheets,groups:Object.keys(S.res)});render();await flush();status('Encaixe salvo no projeto.',false)};
+  const pl=plans().find(p=>p.id===(curProj()||{}).plan);
+  if(pl){try{await api('/api/plan/'+pl.id,{parts:S.parts.filter(p=>!p.guest).map(({pick,guest,...p})=>p),groups:S.groups,seq:S.seq,uid:S.uid,nest:S.savedNest})}
+    catch(e){status('Não foi possível gravar no planejamento: '+e.message,true);return}
+    pl.nestAt=S.savedNest.savedAt;pl.nestSheets=sheets;pl.nestDef=snapText(S.snap)}
+  hist('nest.save',{sheets,groups:Object.keys(S.res),plan:pl?pl.id:''});render();await flush();status(pl?'Encaixe salvo no planejamento '+pl.name+'.':'Encaixe salvo na área de encaixe.',false)};
 async function runNest(){
   const run=++NEST.run;NEST.busy=true;$('#go').disabled=true;
   try{await nestRun(run)}finally{if(run===NEST.run){NEST.busy=false;$('#go').disabled=!S.parts.some(p=>p.on)}}}
 async function nestRun(run){
-  const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),fill:$('#fill').checked,rules:currentRules()};
+  const o={gap:Math.max(0,+$('#gap').value||0),mar:Math.max(0,+$('#mar').value||0),rot:+$('#rot').value,cs:Math.max(0.5,+$('#res').value||2),fill:$('#fill').checked,rules:currentRules(),seq:!!(curProj()||{}).seq,near:!!(curProj()||{}).near};
   const G0=groupsOf();
   for(const k of Object.keys(G0)){const g=S.groups[k];if(!(g&&g.w>2*o.mar+1&&g.h>2*o.mar+1)){status('A chapa de '+k+' precisa ser maior que as margens.',true);return}}
   S.res=null;S.snap=null;S.pdf=null;
@@ -853,7 +849,7 @@ function renderCore(){
   Object.keys(G).forEach(k=>{if(!S.groups[k]){const mem=S.sheetMemory&&S.sheetMemory[k];if(mem&&+mem.w>0&&+mem.h>0)S.groups[k]={w:+mem.w,h:+mem.h};else{const t=+k.split('· ')[1].replace(' mm','');const mdf=/mdf|mdp|compens/i.test(k);S.groups[k]=mdf?{w:2750,h:1840}:{w:3000,h:t>=6?1500:1250}}}});
   $('#groups').innerHTML=Object.keys(G).map(k=>{const g=S.groups[k],q=G[k].reduce((s,p)=>s+p.qty,0),a=G[k].reduce((s,p)=>s+p.A*p.qty,0)/1e6;
    return`<div class="grp" data-k="${esc(k)}"><div class="t">${esc(k)} <span>${q} un · ${a.toFixed(2)} m²</span></div><label class="f">Chapa padrão<select data-preset>${sheetOptions(k,g)}</select></label><div class="row3"><label class="f">Comprimento<input type="number" data-g="w" value="${esc(g.w)}" aria-label="Comprimento da chapa ${esc(k)}"></label><label class="f">Largura<input type="number" data-g="h" value="${esc(g.h)}" aria-label="Largura da chapa ${esc(k)}"></label></div></div>`}).join('')||'<div class="msg">Sem grupos ainda.</div>';
-  renderLegend();updateColorButtons();renderProjList();
+  renderLegend();updateColorButtons();
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
   const ready=!!(R&&S.snap);$('#xLock').hidden=ready;patPreview();
@@ -1264,14 +1260,23 @@ function dxfSheets(list){let o='0\nSECTION\n2\nENTITIES\n';
     for(const p of sh.placed)for(const r of p.rings)pl(r.map(([x,y])=>[x+p.x,y+p.y+oy]),'CORTE');oy+=g.h+200}
   return o+'0\nENDSEC\n0\nEOF\n'}
 const cur=()=>{const gr=S.res[S.tab],g=S.groups[S.tab];return gr.sheets.map(sh=>({sh,g}))};
+/* Nome padrão de exportação: NN-<espessura>MM-<planejamento>. NN é a ordem de corte entre todas as chapas
+   do encaixe: primeiro as chapas com o produto que vem antes no planejamento (menor posição na lista). */
+function sheetSeq(){const L=[],keys=Object.keys(S.res||{});
+  keys.forEach((k,gi)=>S.res[k].sheets.forEach((sh,i)=>L.push({k,i,gi,r:Math.min(1e9,...sh.placed.map(q=>Number.isFinite(q.it.rank)?q.it.rank:1e9))})));
+  L.sort((a,b)=>a.r-b.r||a.gi-b.gi||a.i-b.i);
+  const w=Math.max(2,String(L.length).length);return new Map(L.map((x,n)=>[x.k+'|'+x.i,String(n+1).padStart(w,'0')]))}
+const planLabel=()=>{const m=curProj()||{};return plain(String(m.plan&&m.product||'ENCAIXE').trim()||'ENCAIXE')};   // sem planejamento enviado: ENCAIXE
+function sheetFile(k,i,seq){const th=String(k.split(' · ')[1]||'').replace(/\s*mm$/,'').replace(',','.');
+  return safeName((seq||sheetSeq()).get(k+'|'+i)+'-'+th+'MM-'+planLabel())}
 const safeName=s=>String(s||'encaixe').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_').replace(/^_+|_+$/g,'')||'encaixe';
 const nm=()=>safeName((($('#job').value||S.file)||'pecas')+'_'+S.tab);
-$('#xsvg').onclick=()=>cur().forEach(({sh,g},i)=>dl(`${nm()}_chapa${i+1}.svg`,sheetSVG(sh,g,true).replace('<svg ',`<svg width="${g.w}mm" height="${g.h}mm" `),'image/svg+xml'));
-$('#xdxf').onclick=()=>cur().forEach((c,i)=>dl(`${nm()}_chapa${i+1}.dxf`,dxfSheets([c]),'text/plain'));
-$('#xall').onclick=()=>dl(`${nm()}_todas.dxf`,dxfSheets(cur()),'text/plain');
+$('#xsvg').onclick=()=>{const q=sheetSeq();cur().forEach(({sh,g},i)=>dl(sheetFile(S.tab,i,q)+'.svg',sheetSVG(sh,g,true).replace('<svg ',`<svg width="${g.w}mm" height="${g.h}mm" `),'image/svg+xml'))};
+$('#xdxf').onclick=()=>{const q=sheetSeq();cur().forEach((c,i)=>dl(sheetFile(S.tab,i,q)+'.dxf',dxfSheets([c]),'text/plain'))};
+$('#xall').onclick=()=>{const th=String(S.tab.split(' · ')[1]||'').replace(/\s*mm$/,'');dl(safeName('TODAS-'+th+'MM-'+planLabel())+'.dxf',dxfSheets(cur()),'text/plain')};
 $('#xdwg').onclick=async()=>{
   const list=cur();status('Gerando DWG…',false);
-  try{for(const[i,c]of list.entries()){const r=await sfetch('/api/dxf-dwg',{method:'POST',body:dxfSheets([c])});if(!r.ok){status(await r.text(),true);return}dl(`${nm()}_chapa${i+1}.dwg`,await r.blob(),'application/acad')}
+  const q=sheetSeq();try{for(const[i,c]of list.entries()){const r=await sfetch('/api/dxf-dwg',{method:'POST',body:dxfSheets([c])});if(!r.ok){status(await r.text(),true);return}dl(sheetFile(S.tab,i,q)+'.dwg',await r.blob(),'application/acad')}
     status(list.length+' DWG gerado(s).',false)}
   catch(e){status(e.message,true)}};
 renderPresets();render();
@@ -1279,11 +1284,10 @@ renderPresets();render();
 function plain(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function nameFrom(pat,ctx){return safeName(plain(pat.replace(/\{(\w+)\}/g,(_,k)=>ctx[k]==null?'':ctx[k])).replace(/\s+/g,'_').replace(/_{2,}/g,'_'))}
 function epsPlan(keys){
-  const p=curProj(),pat0=($('#namePat').value||S.store.settings.naming).trim()||S.store.settings.naming,pat=/\{seq\}/.test(pat0)?pat0:pat0+'_{seq}';
-  const items=[],used={};
+  const q=sheetSeq(),items=[],used={};
   for(const key of keys){const[mat,thTxt]=key.split(' · '),th=thTxt.replace(' mm',''),sk=[S.projectId,mat,th].join('|');
     for(const[i,sh]of S.res[key].sheets.entries()){const n=(used[sk]??(S.seq[sk]||0))+1;used[sk]=n;
-      const name=nameFrom(pat,{projeto:p.code,produto:p.product,material:mat,espessura:th,lote:p.lot,ordem:p.order,seq:String(n).padStart(3,'0')})+'.eps',g=S.groups[key];
+      const name=sheetFile(key,i,q)+'.eps',g=S.groups[key];
       items.push({key,sk,n,name,mat,th,sheet:{w:g.w,h:g.h,parts:sh.placed.map(q=>({rings:q.rings.map(r=>r.map(([x,y])=>[x+q.x,y+q.y])),color:partColor(q.it)}))},parts:sh.placed.length,src:[...new Set(sh.placed.map(q=>fileName(q.it.fileId)).filter(Boolean))]})}}
   return items}
 async function exportEps(keys){
@@ -1307,9 +1311,8 @@ async function exportEps(keys){
 $('#xeps').onclick=()=>exportEps([S.tab]);
 $('#xepsall').onclick=()=>exportEps(Object.keys(S.res));
 /* Prévia do nome com o projeto e a chapa da aba aberta (sequência ilustrativa 001). */
-function patPreview(){const p=curProj(),k=S.tab||Object.keys(S.groups)[0]||'Material · 3 mm',[mat,thTxt]=k.split(' · ');
-  const pat0=($('#namePat').value||S.store.settings.naming).trim()||S.store.settings.naming,pat=/\{seq\}/.test(pat0)?pat0:pat0+'_{seq}';
-  $('#patPrev').textContent=nameFrom(pat,{projeto:p?p.code:'PROJETO',produto:p?p.product:'',material:mat,espessura:String(thTxt||'').replace(' mm',''),lote:p?p.lot:'',ordem:p?p.order:'',seq:'001'})+'.eps'}
+function patPreview(){const k=S.tab||Object.keys(S.groups)[0]||'Material · 15 mm',th=String(k.split(' · ')[1]||'').replace(/\s*mm$/,'');
+  $('#patPrev').textContent=safeName('01-'+th+'MM-'+planLabel())+'.eps'}
 
 /* ---------- início ---------- */
 (async()=>{
@@ -1321,8 +1324,9 @@ function patPreview(){const p=curProj(),k=S.tab||Object.keys(S.groups)[0]||'Mate
     let migrated=false;
     try{const old=JSON.parse(localStorage.getItem(STORE)||'{}').presets;if(Array.isArray(old)&&old.length&&!S.store.presets.length){S.store.presets=old;migrated=true}}catch(e){}
     S.ready=true;renderPresets();
-    const last=S.store.settings.last,id=S.store.projects.some(p=>p.id===last)?last:(S.store.projects[0]||{}).id;
-    await openProject(id);
+    if(!Array.isArray(S.store.products))S.store.products=[];
+    if(!S.store.projects.some(p=>p.id===MESA)){S.store.projects.push({id:MESA,code:'MESA',product:'Área de encaixe',order:'',lot:'',createdAt:new Date().toISOString(),status:'aberto',notes:''});await flush()}
+    await openProject(MESA);renderProducts();
     if(migrated){hist('presets.migrate',{n:S.store.presets.length});autosave()}
     setSaved('dados no servidor','ok');
   }catch(e){setSaved('servidor indisponível: nada será gravado','bad');renderProj()}
@@ -1333,9 +1337,12 @@ const mainEl=$('main'),appEl=$('#app');
 function kickView(){mainEl.classList.remove('view-in');void mainEl.offsetWidth;mainEl.classList.add('view-in');clearTimeout(mainEl._vin);mainEl._vin=setTimeout(()=>mainEl.classList.remove('view-in'),280)}
 function showView(v,toggle){
   const changed=mainEl.dataset.view!==v;
-  const bd=v==='projetos'?$('#pboard'):v==='pecas'?$('#board'):null;
+  const bd=v==='produtos'?$('#prodboard'):v==='pecas'?$('#board'):null;
+  if(v==='produtos')renderProducts();
+  if(v==='planejamento')renderPlan();
   if(bd&&changed){bd.classList.add('enter');clearTimeout(bd._t);bd._t=setTimeout(()=>bd.classList.remove('enter'),900)}
   if(v==='presets'){prefillPreset();loadNet()}
+  if(v==='cnc')renderCnc();
   const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
   mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
   const open=!mainEl.classList.contains('nopanel');
@@ -1345,7 +1352,7 @@ function showView(v,toggle){
   if(changed)kickView()}
 kickView();
 $('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(b)showView(b.dataset.view,true)});
-$('#go').addEventListener('click',()=>{if(['pecas','projetos'].includes(mainEl.dataset.view))showView('encaixe')},true);
+$('#go').addEventListener('click',()=>{if(['pecas','produtos','planejamento'].includes(mainEl.dataset.view))showView('encaixe')},true);
 $('#panelToggle').onclick=()=>showView(mainEl.dataset.view,true);
 $('#railToggle').onclick=()=>{const wide=$('.rail').offsetWidth>100;appEl.classList.toggle('rail-min',wide);appEl.classList.toggle('rail-max',!wide);
   $('#railToggle').querySelector('span').textContent=wide?'Expandir menu':'Recolher menu'};
@@ -1354,3 +1361,314 @@ function setZoom(i){zi=Math.max(0,Math.min(ZOOMS.length-1,i));const z=ZOOMS[zi],
   $('#zVal').textContent=zi?Math.round(z*100)+'%':'Ajustado';$('#zOut').disabled=$('#zFit').disabled=!zi;$('#zIn').disabled=zi===ZOOMS.length-1}
 $('#zIn').onclick=()=>setZoom(zi+1);$('#zOut').onclick=()=>setZoom(zi-1);$('#zFit').onclick=()=>setZoom(0);
 setZoom(0);
+
+/* ---------- Usinagem CNC (no estilo Aspire/Alphacam: ferramentas, estratégia e pós-processador) ---------- */
+const CAM_POST={name:'NCStudio (mm)',ext:'nc',header:'G90 G17 G21 G40 G49 G80\nG0 Z{SAFEZ}',toolchange:'T{T} M06\nS{RPM} M03',spindle:'S{RPM} M03',footer:'G0 Z{SAFEZ}\nM05\nG0 X{HOMEX} Y{HOMEY}\nM30',comments:false};
+const CAM_DEF={machine:{atc:false,zero:'topo',safe:15,over:0.2,rapid:12000,home_x:0,home_y:0},post:CAM_POST,
+  tools:[{id:'t1',name:'Fresa reta 6 mm',kind:'fresa',dia:6,num:1,rpm:18000,feed:6000,plunge:1500,step:6,stepover:40,flutes:2},
+         {id:'t2',name:'Broca 5 mm',kind:'broca',dia:5,num:2,rpm:12000,feed:2000,plunge:1200,step:20,stepover:40,flutes:2}],
+  strategy:{profile_tool:'t1',pocket_tool:'t1',dir:'climb',ramp:40,small_first:true,drill:true,peck:0,tabs:true,tab_cm2:150,tab_count:2,tab_w:6,tab_h:2}};
+const CNC={tool:null,group:'',sheet:0,res:null,t:null,run:0};
+function camCfg(){const st=S.store.settings;if(!st.cam||typeof st.cam!=='object')st.cam=JSON.parse(JSON.stringify(CAM_DEF));const c=st.cam;
+  for(const k of['machine','post','strategy'])c[k]={...CAM_DEF[k],...(c[k]||{})};if(!Array.isArray(c.tools))c.tools=JSON.parse(JSON.stringify(CAM_DEF.tools));return c}
+const camGet=(o,path)=>path.split('.').reduce((a,k)=>a==null?a:a[k],o);
+function camSet(o,path,v){const ks=path.split('.'),last=ks.pop();ks.reduce((a,k)=>a[k],o)[last]=v}
+function camPayloadCfg(){const c=camCfg();return{...c,strategy:{...c.strategy,tab_area:(+c.strategy.tab_cm2||0)*100}}}
+function renderCncPanel(){const c=camCfg();
+  document.querySelectorAll('.c-tools').forEach(sel=>{sel.innerHTML=c.tools.map(t=>`<option value="${esc(t.id)}">T${esc(t.num)} · ${esc(t.name)}</option>`).join('')});
+  document.querySelectorAll('[data-cm]').forEach(el=>{const v=camGet(c,el.dataset.cm);if(el.type==='checkbox')el.checked=!!v;else if(el.hasAttribute('data-bool'))el.value=v?'1':'0';else el.value=v??''});
+  if(!c.tools.some(t=>t.id===CNC.tool))CNC.tool=c.tools[0]?.id||null;
+  $('#cTools').innerHTML=c.tools.map(t=>`<button type="button" class="tool-item ${t.id===CNC.tool?'on':''}" data-tool="${esc(t.id)}"><b class="tn">T${esc(t.num)}</b><span><b>${esc(t.name)}</b><small>${t.kind==='broca'?'Broca':'Fresa'} Ø${esc(t.dia)} mm · ${esc(t.rpm)} RPM · ${esc(t.feed)} mm/min</small></span></button>`).join('')||'<div class="msg">Nenhuma ferramenta. Crie uma.</div>';
+  const t=c.tools.find(x=>x.id===CNC.tool);$('#cToolEd').hidden=!t;$('#cToolDel').disabled=!t||c.tools.length<2;
+  if(t){document.querySelectorAll('[data-ct]').forEach(el=>{el.value=t[el.dataset.ct]??''});
+    const chip=t.feed/(t.rpm*(t.flutes||2));$('#cChip').textContent=`Carga por dente: ${chip.toFixed(3)} mm (avanço ÷ rotação ÷ cortes). Em MDF, fresas de 6 mm costumam trabalhar entre 0,10 e 0,25 mm.`}}
+function camChanged(){autosave();clearTimeout(CNC.t);CNC.t=setTimeout(()=>{if(mainEl.dataset.view==='cnc')camCalc()},500)}
+document.addEventListener('change',e=>{const el=e.target.closest('[data-cm]');if(!el)return;const c=camCfg();
+  const v=el.type==='checkbox'?el.checked:el.hasAttribute('data-bool')?el.value==='1':el.type==='number'?(el.value===''?0:+el.value):el.value;camSet(c,el.dataset.cm,v);renderCncPanel();camChanged()});
+document.addEventListener('change',e=>{const el=e.target.closest('[data-ct]');if(!el)return;const t=camCfg().tools.find(x=>x.id===CNC.tool);if(!t)return;
+  t[el.dataset.ct]=el.type==='number'?(el.value===''?0:+el.value):el.value;renderCncPanel();camChanged()});
+$('#cTools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(!b)return;CNC.tool=b.dataset.tool;renderCncPanel()});
+$('#cToolNew').onclick=()=>{const c=camCfg(),id=nid('t'),num=Math.max(0,...c.tools.map(t=>+t.num||0))+1;c.tools.push({id,name:'Nova fresa',kind:'fresa',dia:6,num,rpm:18000,feed:5000,plunge:1500,step:6,stepover:40,flutes:2});CNC.tool=id;renderCncPanel();camChanged()};
+$('#cToolDel').onclick=async()=>{const c=camCfg(),t=c.tools.find(x=>x.id===CNC.tool);if(!t||c.tools.length<2)return;
+  if(!await ask('Excluir a ferramenta "'+t.name+'"?','Excluir',true))return;c.tools=c.tools.filter(x=>x!==t);
+  for(const k of['profile_tool','pocket_tool'])if(c.strategy[k]===t.id)c.strategy[k]=c.tools[0].id;CNC.tool=c.tools[0].id;renderCncPanel();camChanged()};
+$('#cPostReset').onclick=()=>{camCfg().post={...CAM_POST};renderCncPanel();camChanged()};
+function camKeys(){return S.res?Object.keys(S.res).filter(k=>S.res[k].sheets.length):[]}
+function camSheets(key,only){const g=S.groups[key],p=curProj(),[mat,thTxt]=key.split(' · '),th=parseFloat(thTxt),warns=[];
+  const list=S.res[key].sheets.map((sh,i)=>({i,sh})).filter(x=>only==null||x.i===only);
+  const q=sheetSeq(),sheets=list.map(({sh,i})=>({name:sheetFile(key,i,q),
+    w:g.w,h:g.h,th,parts:sh.placed.map(q=>{const pk=q.it.pk||[];if(pk.length&&q.mi)warns.push(q.it.name+': peça espelhada com rebaixo, o rebaixo sai do outro lado da chapa.');
+      const tp=pk.length?tf([q.it.rings[0],...pk.map(x=>x.r)],q.a,q.mi).rings.slice(1):[];
+      return{rings:q.rings.map(r=>r.map(([x,y])=>[x+q.x,y+q.y])),pockets:pk.map((x,k)=>({r:tp[k].map(([u,v])=>[u+q.x,v+q.y]),d:x.d,k:x.k}))}})}));
+  return{sheets,warns:[...new Set(warns)]}}
+function renderCnc(){const keys=camKeys();renderCncPanel();
+  if(!keys.includes(CNC.group))CNC.group=keys.includes(S.tab)?S.tab:keys[0]||'';
+  $('#cGroup').innerHTML=keys.map(k=>`<option ${k===CNC.group?'selected':''}>${esc(k)}</option>`).join('');
+  const n=CNC.group?S.res[CNC.group].sheets.length:0;if(CNC.sheet>=n)CNC.sheet=0;
+  $('#cSheet').innerHTML=Array.from({length:n},(_,i)=>`<option value="${i}" ${i===CNC.sheet?'selected':''}>Chapa ${i+1} de ${n}</option>`).join('');
+  $('#cCount').textContent=keys.length?keys.reduce((a,k)=>a+S.res[k].sheets.length,0)+' chapa(s)':'';
+  [$('#cGroup'),$('#cSheet'),$('#cCalc'),$('#cGen'),$('#cSim')].forEach(el=>{el.disabled=!keys.length});
+  if(!keys.length){$('#cPrev').innerHTML='<div class="board-empty"><b>Nada para usinar ainda.</b><span>Encaixe as peças primeiro; as chapas encaixadas aparecem aqui com os caminhos da fresa.</span><button type="button" class="pri" data-goto="encaixe">Ir para Encaixar</button></div>';
+    $('#cStats').innerHTML='';$('#cWarn').innerHTML='';$('#cFiles').innerHTML='';$('#cMsg').textContent='';return}
+  camCalc()}
+async function camCalc(){if(!CNC.group||!S.res||!S.res[CNC.group])return;const run=++CNC.run,{sheets,warns}=camSheets(CNC.group,CNC.sheet);
+  $('#cMsg').className='msg';$('#cMsg').textContent='Calculando caminhos…';
+  let R;try{R=await api('/api/gcode',{cam:camPayloadCfg(),sheets})}catch(e){if(run!==CNC.run)return;$('#cMsg').className='msg w';$('#cMsg').textContent=e.message;$('#cPrev').innerHTML='';return}
+  if(run!==CNC.run)return;const r=R.sheets[0];CNC.res=r;$('#cMsg').textContent='';
+  $('#cPrev').innerHTML=camSvg(sheets[0],r.preview);
+  const st=r.stats,min=st.minutes,tt=min>=60?Math.floor(min/60)+' h '+Math.round(min%60)+' min':Math.max(1,Math.round(min))+' min';
+  $('#cStats').innerHTML=`<div><dt>Tempo estimado</dt><dd>${tt}</dd></div><div><dt>Corte</dt><dd>${st.cut_m.toLocaleString('pt-BR',{maximumFractionDigits:1})} m</dd></div><div><dt>Ferramentas</dt><dd>${st.tools.length}</dd></div><div><dt>Arquivos</dt><dd>${r.files.length}</dd></div>`;
+  $('#cWarn').innerHTML=[...warns,...r.warnings].map(w=>`<span>${esc(w)}</span>`).join('');
+  $('#cFiles').innerHTML=r.files.map(f=>`<span>${f.tool?esc(f.tool)+': ':''}<code>${esc(f.name)}</code></span>`).join('')}
+function camSvg(sh,prev){const W=sh.w,H=sh.h,pad=Math.max(W,H)*0.02,sw=Math.max(W,H)/700;
+  const col={externo:'var(--ac)',interno:'var(--alt)',rebaixo:'var(--ok)'};let o='';
+  for(const p of sh.parts){for(const r of p.rings)o+=`<path d="M${r.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join('L')}Z" fill="var(--sf3)" fill-opacity=".55" stroke="none"/>`;
+    for(const k of p.pockets||[])o+=`<path d="M${k.r.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join('L')}Z" fill="var(--ok)" fill-opacity=".12" stroke="none"/>`}
+  for(const p of prev){if(p.op==='furo'){const[x,y]=p.pts[0];o+=`<circle cx="${x}" cy="${y}" r="${p.r}" fill="var(--warn)" fill-opacity=".35" stroke="var(--warn)" stroke-width="${sw}"/>`;continue}
+    o+=`<path d="M${p.pts.map(q=>q[0]+' '+q[1]).join('L')}Z" fill="none" stroke="${col[p.op]}" stroke-width="${sw*1.4}" stroke-linejoin="round"/>`;
+    for(const[a,b]of p.tabs||[]){const m=camAt(p.pts,(a+b)/2);if(m)o+=`<circle cx="${m[0]}" cy="${m[1]}" r="${sw*5}" fill="#f472b6"/>`}}
+  return `<svg viewBox="${-pad} ${-pad} ${W+pad*2} ${H+pad*2}" role="img" aria-label="Caminhos da fresa na chapa"><g transform="translate(0 ${H}) scale(1 -1)"><rect x="0" y="0" width="${W}" height="${H}" fill="var(--sheet)" stroke="var(--ln2)" stroke-width="${sw}"/>${o}</g></svg>`}
+function camAt(pts,s){let acc=0;for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(acc+L>=s){const t=L?(s-acc)/L:0;return[a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]}acc+=L}return null}
+$('#cGroup').onchange=e=>{CNC.group=e.target.value;CNC.sheet=0;renderCnc()};
+$('#cSheet').onchange=e=>{CNC.sheet=+e.target.value;camCalc()};
+$('#cCalc').onclick=()=>camCalc();
+/* Simulação (sim.js): roda o G-code da chapa escolhida sobre o material, em 2D ou 3D */
+const SIM_MAT=k=>/acr[ií]l/i.test(k)?'acr':/acm|alum/i.test(k)?'acm':/compens/i.test(k)?'comp':/preto/i.test(k)?'bpp':/\bbp\b|branco/i.test(k)?'bp':'mdf';
+$('#cSim').onclick=async()=>{if(!CNC.res)await camCalc();const r=CNC.res;if(!r){toast('Calcule os caminhos antes de simular.','bad');return}
+  const c=camCfg(),g=S.groups[CNC.group],th=parseFloat(CNC.group.split(' · ')[1]);
+  c.sim=c.sim||{};const material=c.sim[CNC.group]||{mat:SIM_MAT(CNC.group)};
+  try{window.CamSim.open({title:'Simulação · '+CNC.group+' · chapa '+(CNC.sheet+1),sheet:{w:g.w,h:g.h,th},files:r.files,tools:c.tools,zero:c.machine.zero,over:+c.machine.over||0,rapid:+c.machine.rapid||12000,material:{...material},
+    onMaterial:m=>{camCfg().sim={...(camCfg().sim||{}),[CNC.group]:m};autosave()}})}
+  catch(e){toast(e.message,'bad')}};
+$('#cGen').onclick=async()=>{const p=curProj();if(!p){toast('Selecione um projeto.','bad');return}
+  if(!S.res||!CNC.group){toast('Encaixe antes de gerar o G-code.','bad');return}
+  const{sheets,warns}=camSheets(CNC.group),c=camCfg();
+  if(!await ask(`Gerar G-code de ${sheets.length} chapa(s) de ${CNC.group} para ${c.post.name}?\n\nTroca de ferramenta: ${c.machine.atc?'automática (um arquivo por chapa)':'manual (um arquivo por ferramenta)'}.\nZero Z: ${c.machine.zero==='mesa'?'mesa':'topo da chapa'}. Origem no canto inferior esquerdo.`+(warns.length?'\n\nAvisos:\n'+warns.map(w=>'• '+w).join('\n'):'')+'\n\nConfira a simulação no controle da máquina antes de cortar.','Gerar',false))return;
+  status('Gerando G-code…',false);
+  let R;try{R=await api('/api/gcode',{cam:camPayloadCfg(),sheets})}catch(e){status(e.message,true);hist('export.error',{format:'gcode',error:e.message});return}
+  let n=0;for(const s of R.sheets)for(const f of s.files){dl(safeName(f.name),f.gcode,'text/plain');n++}
+  hist('export',{format:'gcode',post:c.post.name,group:CNC.group,files:R.sheets.flatMap(s=>s.files.map(f=>f.name)),minutes:R.sheets.reduce((a,s)=>a+s.stats.minutes,0)});
+  status(n+' arquivo(s) de G-code gerado(s).',false);toast(n+' arquivo(s) de G-code baixado(s).','ok')};
+$('#cPrev').addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)showView(b.dataset.goto)});
+
+/* ---------- Produtos: base de produtos (catálogo) ----------
+   Cada produto tem nome e as peças importadas (quantidade, giro, espelhamento, material e espessura),
+   gravados em data/product_<id>.json. O índice (nome, contagens) vai no store.json. */
+const MESA='mesa';   // área de encaixe interna, até a tela de pedido/OP existir
+let IMP_TARGET='project';
+const PR={id:null,doc:null,rev:0,sent:'',t:null,mat:''};
+const PROD_ROT=[['auto','Giro padrão'],['free','Giro livre 360°'],['90','Giro 90°'],['180','Giro 180° (veio)'],['0','Fixo (veio)']];
+const prodIdx=()=>S.store.products||(S.store.products=[]);
+const matKey=p=>(String(p.mat||'').trim()||'Sem material')+' · '+p.th+' mm';
+/* Cor fixa por material (pelo nome), só para identificar na tela. */
+function matColor(p){const k=String(p.mat||'').trim().toLowerCase();let h=0;for(const ch of k)h=(h*31+ch.charCodeAt(0))>>>0;return PALETTE[h%PALETTE.length]}
+const initials=t=>String(t||'?').trim().split(/[\s_-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?';
+const prodPayload=()=>({name:PR.doc.name,uid:PR.doc.uid,files:PR.doc.files,parts:PR.doc.parts,createdAt:PR.doc.createdAt});
+function prodSyncIdx(){const ix=prodIdx().find(x=>x.id===PR.id);if(!ix)return;const P=PR.doc.parts;
+  Object.assign(ix,{name:PR.doc.name,parts:P.length,units:P.reduce((a,p)=>a+p.qty,0),updatedAt:new Date().toISOString()});autosave()}
+async function prodSave(){if(!PR.id)return;const id=PR.id,body=JSON.stringify(prodPayload());if(body===PR.sent)return;
+  const r=await api('/api/product/'+id,{...prodPayload(),rev:PR.rev});if(id!==PR.id)return;PR.rev=r.rev;PR.sent=body}
+function prodChanged(){prodSyncIdx();clearTimeout(PR.t);setSaved('gravando…');PR.t=setTimeout(()=>prodSave().then(()=>setSaved('salvo','ok')).catch(e=>{setSaved('falha ao gravar','bad');toast(e.message,'bad')}),600)}
+async function prodFlush(){clearTimeout(PR.t);if(PR.id)await prodSave()}
+addEventListener('pagehide',()=>{if(!PR.id)return;const body=JSON.stringify(prodPayload());if(body!==PR.sent)fetch('/api/product/'+PR.id,{method:'POST',keepalive:true,body:JSON.stringify({...prodPayload(),rev:PR.rev})}).catch(()=>{})});
+async function openProduct(id){await prodFlush();
+  if(!id){PR.id=null;PR.doc=null;renderProducts();return}
+  const d=await api('/api/product/'+id);
+  PR.id=id;PR.mat='';PR.rev=Number.isInteger(d.rev)?d.rev:0;
+  PR.doc={name:String(d.name||(prodIdx().find(x=>x.id===id)||{}).name||'Produto'),uid:Math.max(0,num(d.uid,0)),files:Array.isArray(d.files)?d.files:[],createdAt:d.createdAt||'',
+    parts:(Array.isArray(d.parts)?d.parts:[]).map(p=>({...normPart(p),mirror:!!p.mirror,rot:PROD_ROT.some(r=>r[0]===p.rot)?p.rot:'auto',gap:p.gap==null?null:Math.max(0,num(p.gap,0)),mar:p.mar==null?null:Math.max(0,num(p.mar,0))}))};
+  PR.sent=JSON.stringify(prodPayload());renderProducts()}
+function renderProducts(){const home=!PR.id;$('#prodHome').hidden=!home;$('#prodDetail').hidden=home;
+  const L=prodIdx(),dt=v=>{const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('pt-BR')};
+  $('#prodCount').textContent=L.length?L.length+' no total':'';
+  if(home){const q=($('#prodFilter').value||'').trim().toLowerCase(),ord=L.filter(p=>!q||String(p.name).toLowerCase().includes(q)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+    $('#prodList').innerHTML=ord.map((p,k)=>`<article class="pcard" style="--i:${k}">
+      <button type="button" class="pcard-open" data-prod="${esc(p.id)}" aria-label="Abrir produto ${esc(p.name)}"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.name))}</span>
+        <span class="pcard-txt"><b>${esc(p.name)}</b><span>${esc(p.parts||0)} peça(s) · ${esc(p.units||0)} unidade(s)</span></span></button>
+      <div class="pcard-meta">${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}</div>
+      <div class="pcard-foot"><span class="pcard-hint">Abrir →</span><button type="button" class="icon pcard-del" data-del-prod="${esc(p.id)}" aria-label="Excluir produto ${esc(p.name)}" title="Excluir produto"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`).join('')
+      ||`<div class="board-empty">${L.length?'Nenhum produto com esse nome.':'<b>Nenhum produto ainda.</b>Crie o primeiro e importe as peças dele.<button type="button" class="pri" data-new-prod>Novo produto</button>'}</div>`;
+    $('#prodSide').innerHTML=`<div class="msg">${L.length?'Abra um produto para ver e editar as peças.':'Crie um produto para começar a base.'}</div>`;return}
+  renderProduct()}
+function renderProduct(){const d=PR.doc,P=d.parts,un=P.reduce((a,p)=>a+p.qty,0);
+  if(document.activeElement!==$('#prodName'))$('#prodName').value=d.name;
+  $('#prodInfo').textContent=P.length+' peça(s) · '+un+' unidade(s)';
+  // visualização por material: filtro no topo e um bloco por material · espessura (os dados não mudam)
+  const groups=new Map();for(const p of P){const k=matKey(p);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p)}
+  if(PR.mat&&!groups.has(PR.mat))PR.mat='';
+  $('#prodMats').innerHTML=groups.size>1?`<button type="button" class="mat-chip" data-mat="" aria-pressed="${!PR.mat}">Todos <small>${esc(P.length)}</small></button>`+[...groups].map(([k,L])=>`<button type="button" class="mat-chip" data-mat="${esc(k)}" aria-pressed="${PR.mat===k}"><span class="mat-dot" style="--mc:${matColor(L[0])}"></span>${esc(k)} <small>${esc(L.length)}</small></button>`).join(''):'';
+  const card=(p,k)=>`<article class="ppart" data-pp="${esc(p.id)}" style="--i:${k};--mc:${matColor(p)}">
+      <div class="ppart-art"><svg viewBox="-2 ${esc(-p.h-2)} ${esc(p.w+4)} ${esc(p.h+4)}" aria-hidden="true"><path d="${path(p.rings)}" fill="${matColor(p)}" fill-opacity=".85" fill-rule="evenodd"/>${(p.pk||[]).map(k2=>`<path d="${path([k2.r])}" fill="var(--ok)" fill-opacity=".7"/>`).join('')}</svg></div>
+      <input class="ppart-name" data-pf="name" value="${esc(p.name)}" maxlength="120" aria-label="Nome da peça">
+      <span class="ppart-meta">${esc(Math.round(p.w))} × ${esc(Math.round(p.h))} mm · ${esc(p.mat)} ${esc(p.th)} mm${p.holes?' · '+esc(p.holes)+' furo(s)':''}${(p.pk||[]).length?' · '+esc(p.pk.length)+' rebaixo(s)':''}</span>
+      <div class="ppart-ctl"><label class="f">Quantidade<input type="number" min="1" step="1" data-pf="qty" value="${esc(p.qty)}"></label>
+        <label class="f">Giro<select data-pf="rot">${PROD_ROT.map(([v,t])=>`<option value="${v}" ${p.rot===v?'selected':''}>${t}</option>`).join('')}</select></label>
+        <label class="f">Espaço entre peças (mm)<input type="number" min="0" step="0.5" data-pf="gap" value="${p.gap==null?'':esc(p.gap)}" placeholder="global" title="Espaço entre esta peça e as vizinhas. Vazio = o do encaixe."></label>
+        <label class="f">Margem da chapa (mm)<input type="number" min="0" step="0.5" data-pf="mar" value="${p.mar==null?'':esc(p.mar)}" placeholder="global" title="Distância mínima desta peça até a borda da chapa. Vazio = a do encaixe."></label></div>
+      <div class="ppart-foot"><label class="f chk" title="Permite que o encaixe use a peça espelhada"><input type="checkbox" data-pf="mirror" ${p.mirror?'checked':''}> Espelhar</label>
+        <button type="button" class="icon pcard-del" data-pdel aria-label="Excluir peça ${esc(p.name)}" title="Excluir peça"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`;
+  $('#prodParts').innerHTML=[...groups].filter(([k])=>!PR.mat||PR.mat===k).map(([k,L])=>`<section class="pgroup"><header class="pgroup-hd"><span class="mat-dot" style="--mc:${matColor(L[0])}"></span><b>${esc(k)}</b><span>${esc(L.length)} peça(s) · ${esc(L.reduce((a,p)=>a+p.qty,0))} unidade(s)</span></header><div class="ptiles">${L.map(card).join('')}</div></section>`).join('')
+    ||'<div class="board-empty"><b>Produto sem peças.</b>Importe os desenhos (DXF, DWG ou SVG) das peças deste produto.<button type="button" class="pri" data-prod-import>Importar peças</button></div>';
+  const mats=[...new Set(P.map(p=>p.mat+' · '+p.th+' mm'))];
+  $('#prodSide').innerHTML=`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(initials(d.name))}</span><div><b>${esc(d.name)}</b><span>${esc(d.files.length)} arquivo(s) importado(s)</span></div></div>
+    <dl class="psum-dl"><div><dt>Peças</dt><dd>${esc(P.length)}</dd></div><div><dt>Unidades</dt><dd>${esc(un)}</dd></div></dl>
+    ${mats.length?`<div class="psum-links"><b>Materiais</b>${mats.map(m=>`<span class="tag inf">${esc(m)}</span>`).join('')}</div>`:''}
+    <button type="button" class="psum-del" data-del-prod="${esc(PR.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir produto</button></div>`}
+function prodCommit(use,partial){const d=PR.doc,done=[];
+  for(const r of use){const fid=nid('f'),stem=r.name.replace(/\.\w+$/,''),before=d.parts.length,mat=r.mat.trim(),th=r.th;
+    for(const p of r.parts){const sig=[Math.round(p.A/4),Math.round(Math.max(p.w,p.h)),Math.round(Math.min(p.w,p.h)),p.holes].join('|');
+      const ex=d.parts.find(q=>q.sig===sig&&q.fileId===fid&&q.mat===mat&&q.th===th);if(ex){ex.qty++;continue}
+      d.parts.push({...p,id:++d.uid,sig,qty:1,mirror:false,rot:'auto',gap:null,mar:null,mat,th,name:stem+' '+(d.parts.length-before+1),fileId:fid})}
+    d.files.push({id:fid,name:r.name,format:r.ext,size:r.size,hash:r.hash,importedAt:new Date().toISOString(),parts:d.parts.length-before,mat,th});
+    done.push({name:r.name,parts:d.parts.length-before})}
+  hideModal('impModal');IMP=null;IMP_TARGET='project';
+  if(!done.length){toast('Nada importado.','bad');return}
+  hist('product.import',{id:PR.id,name:d.name,files:done,unread:partial.map(r=>({name:r.name,entities:r.geo}))});
+  renderProduct();prodChanged();toast(done.reduce((a,x)=>a+x.parts,0)+' peça(s) importada(s) para '+d.name+'.','ok')}
+async function startProdImport(files){files=[...files];if(!files.length||!PR.id)return;
+  IMP_TARGET='product';const rows=[];for(const f of files)rows.push(await analyze(f));
+  const seen=new Map();rows.forEach(r=>{if(r.hash&&seen.has(r.hash)&&!r.dup){r.dup=seen.get(r.hash)+' (neste lote)';r.include=false}else if(r.hash)seen.set(r.hash,r.name)});
+  reviewImport(rows)}
+async function newProduct(){await prodFlush();
+  let n=1,name='Novo produto';while(prodIdx().some(p=>p.name===name))name='Novo produto '+(++n);
+  const id=nid('pr'),now=new Date().toISOString();
+  try{await api('/api/product/'+id,{name,uid:0,files:[],parts:[],createdAt:now})}catch(e){toast(e.message,'bad');return}
+  prodIdx().push({id,name,parts:0,units:0,createdAt:now});autosave();hist('product.create',{id,name});
+  await openProduct(id);const el=$('#prodName');el.focus();el.select()}
+async function deleteProduct(id){const p=prodIdx().find(x=>x.id===id);if(!p)return;
+  if(!await ask('Excluir o produto "'+p.name+'" ('+(p.parts||0)+' peça(s))?\n\nEle sai da base. O arquivo fica guardado na pasta data/ marcado como excluído e pode ser recuperado depois.','Excluir produto',true))return;
+  if(PR.id===id){clearTimeout(PR.t);PR.id=null;PR.doc=null}
+  try{await api('/api/product/'+id+'/delete',{})}catch(e){toast(e.message,'bad');return}
+  S.store.products=prodIdx().filter(x=>x.id!==id);autosave();hist('product.delete',{id,name:p.name});renderProducts();toast('Produto '+p.name+' excluído.','ok')}
+$('#prodNew').onclick=()=>newProduct().catch(e=>toast(e.message,'bad'));
+$('#prodFilter').addEventListener('input',renderProducts);
+$('#prodBack').onclick=()=>openProduct(null).catch(e=>toast(e.message,'bad'));
+$('#prodImport').onclick=()=>$('#prodFile').click();
+$('#prodFile').onchange=e=>{const fl=[...e.target.files];e.target.value='';startProdImport(fl).catch(x=>toast(x.message,'bad'))};
+$('#prodName').addEventListener('input',e=>{if(!PR.doc)return;PR.doc.name=e.target.value.slice(0,120);prodChanged();$('#prodSide b').textContent=PR.doc.name});
+$('#prodName').addEventListener('change',e=>{if(PR.doc&&!PR.doc.name.trim()){PR.doc.name='Produto sem nome';e.target.value=PR.doc.name;prodChanged()}});
+$('#prodboard').addEventListener('click',e=>{
+  const o=e.target.closest('[data-prod]');if(o){openProduct(o.dataset.prod).catch(x=>toast(x.message,'bad'));return}
+  if(e.target.closest('[data-new-prod]')){newProduct();return}
+  if(e.target.closest('[data-prod-import]')){$('#prodFile').click();return}
+  const mc=e.target.closest('[data-mat]');if(mc){PR.mat=mc.dataset.mat;renderProduct();return}
+  const del=e.target.closest('[data-pdel]');if(del&&PR.doc){const id=+del.closest('[data-pp]').dataset.pp,p=PR.doc.parts.find(x=>x.id===id);if(!p)return;
+    ask('Excluir a peça "'+p.name+'" deste produto?','Excluir',true).then(ok=>{if(!ok)return;PR.doc.parts=PR.doc.parts.filter(x=>x!==p);renderProduct();prodChanged()})}});
+$('#prodParts').addEventListener('change',e=>{const el=e.target.closest('[data-pf]');if(!el||!PR.doc)return;const p=PR.doc.parts.find(x=>x.id===+el.closest('[data-pp]').dataset.pp);if(!p)return;
+  const f=el.dataset.pf;if(f==='qty')p.qty=Math.max(1,Math.round(+el.value||1));else if(f==='mirror')p.mirror=el.checked;else if(f==='rot')p.rot=el.value;else if(f==='name')p.name=el.value.trim().slice(0,120)||p.name;
+  else if(f==='gap'||f==='mar')p[f]=el.value.trim()===''?null:Math.max(0,Math.min(500,+el.value||0));   // vazio = valor global do encaixe
+  renderProduct();prodChanged()});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-del-prod]');if(b)deleteProduct(b.dataset.delProd).catch(x=>toast(x.message,'bad'))});
+
+/* ---------- Planejamento: banco de planejamentos (produtos × quantidade) ----------
+   store.json "plans": [{id, name, createdAt, sentAt, items:[{id, qty}]}]. Enviar troca as peças da área de
+   encaixe pelas dos produtos, cada peça com quantidade = quantidade da peça × unidades do produto. */
+const PL={id:null};
+const plans=()=>{const st=S.store;if(!Array.isArray(st.plans))st.plans=[];
+  if(Array.isArray(st.settings.plan)){if(st.settings.plan.length)st.plans.push({id:nid('pl'),name:'Planejamento 1',createdAt:new Date().toISOString(),items:st.settings.plan});delete st.settings.plan;autosave()}   // plano único antigo
+  return st.plans};
+const curPlan=()=>plans().find(p=>p.id===PL.id)||null;
+const planItems=pl=>{pl.items=(pl.items||[]).filter(r=>r&&prodIdx().some(p=>p.id===r.id));
+  // cada produto tem uma cor que não se repete no mesmo planejamento (vira a cor das peças no encaixe)
+  const used=new Set();for(const r of pl.items){const c=hexColor(r.color,'');if(!c||used.has(c.toLowerCase()))r.color=freeColor(used);else r.color=c;used.add(r.color.toLowerCase())}
+  return pl.items};
+function freeColor(used){const c=PALETTE.find(x=>!used.has(x.toLowerCase()));if(c)return c;
+  for(let k=0;;k++){const h=(k*137.508)%360,v=hslHex(h,70,60);if(!used.has(v))return v}}
+function hslHex(h,s,l){s/=100;l/=100;const f=n=>{const k=(n+h/30)%12,c=l-s*Math.min(l,1-l)*Math.max(-1,Math.min(k-3,9-k,1));return Math.round(c*255).toString(16).padStart(2,'0')};return '#'+f(0)+f(8)+f(4)}
+const planUnits=pl=>planItems(pl).reduce((a,r)=>a+((prodIdx().find(x=>x.id===r.id)||{}).units||0)*r.qty,0);
+function renderPlan(){const pl=curPlan();$('#planHome').hidden=!!pl;$('#planDetail').hidden=!pl;
+  const dt=v=>{const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('pt-BR')};
+  if(!pl){const L=plans(),q=($('#planSearch').value||'').trim().toLowerCase();
+    $('#planCount').textContent=L.length?L.length+' no total':'';
+    $('#planCards').innerHTML=L.filter(p=>!q||String(p.name).toLowerCase().includes(q)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map((p,k)=>`<article class="pcard" style="--i:${k}">
+      <button type="button" class="pcard-open" data-plan="${esc(p.id)}" aria-label="Abrir planejamento ${esc(p.name)}"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.name))}</span>
+        <span class="pcard-txt"><b>${esc(p.name)}</b><span>${esc(planItems(p).length)} produto(s) · ${esc(planUnits(p))} peça(s)</span></span></button>
+      <div class="pcard-meta">${p.createdAt?`<span>Criado em ${esc(dt(p.createdAt))}</span>`:''}${p.sentAt?`<span>Enviado ao encaixe em ${esc(dt(p.sentAt))}</span>`:''}</div>
+      <div class="pcard-foot"><span class="pcard-hint">Abrir →</span><button type="button" class="icon pcard-del" data-del-plan="${esc(p.id)}" aria-label="Excluir planejamento ${esc(p.name)}" title="Excluir planejamento"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div></article>`).join('')
+      ||`<div class="board-empty">${L.length?'Nenhum planejamento com esse nome.':'<b>Nenhum planejamento ainda.</b>Crie um e escolha os produtos e quantidades.<button type="button" class="pri" data-new-plan>Novo planejamento</button>'}</div>`;
+    $('#planSide').innerHTML=`<div class="msg">${L.length?'Abra um planejamento para editar e enviar ao encaixe.':'Crie um planejamento para começar.'}</div>`;return}
+  const L=planItems(pl),P=prodIdx(),q=($('#planFilter').value||'').trim().toLowerCase();
+  if(document.activeElement!==$('#planName'))$('#planName').value=pl.name;
+  $('#planCat').innerHTML=P.filter(p=>!q||String(p.name).toLowerCase().includes(q)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'pt-BR')).map(p=>{const inPlan=L.some(r=>r.id===p.id);
+    return `<div class="plan-item${inPlan?' in':''}"><span class="pcard-mark" aria-hidden="true">${esc(initials(p.name))}</span><span><b>${esc(p.name)}</b><small>${esc(p.parts||0)} peça(s) · ${esc(p.units||0)} unidade(s) por produto</small></span>
+      <button type="button" data-plan-add="${esc(p.id)}" ${inPlan?'disabled':''}>${inPlan?'Adicionado':'Adicionar'}</button></div>`}).join('')
+    ||`<div class="msg">${P.length?'Nenhum produto com esse nome.':'Nenhum produto na base. Crie em Produtos.'}</div>`;
+  $('#planSeq').checked=pl.seq!==false;$('#planNear').checked=pl.near!==false;
+  $('#planRows').innerHTML=L.map((r,k)=>{const p=P.find(x=>x.id===r.id);return `<div class="plan-item plan-row" data-plan-row="${esc(r.id)}"><span class="plan-ord"><button type="button" data-plan-mv="-1" ${k?'':'disabled'} aria-label="Subir ${esc(p.name)}">▲</button><b>${k+1}</b><button type="button" data-plan-mv="1" ${k<L.length-1?'':'disabled'} aria-label="Descer ${esc(p.name)}">▼</button></span><span class="pcard-mark" aria-hidden="true" style="background:${esc(r.color)};color:#04121c">${esc(initials(p.name))}</span>
+      <span><b>${esc(p.name)}</b><small>${esc((p.units||0)*r.qty)} peça(s) no encaixe</small></span>
+      <input type="color" value="${esc(r.color)}" data-plan-color aria-label="Cor de ${esc(p.name)}" title="Cor das peças deste produto no encaixe">
+      <label class="f"><input type="number" min="1" step="1" value="${esc(r.qty)}" data-plan-qty aria-label="Quantidade de ${esc(p.name)}"></label>
+      <button type="button" class="icon pcard-del" data-plan-del aria-label="Tirar ${esc(p.name)} do planejamento" title="Tirar do planejamento"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div>`}).join('')
+    ||'<div class="board-empty"><b>Planejamento vazio.</b>Adicione produtos da lista ao lado.</div>';
+  const units=planUnits(pl),prods=L.reduce((a,r)=>a+r.qty,0);
+  $('#planInfo').textContent=L.length+' produto(s) · '+units+' peça(s)';
+  [$('#planSend'),$('#planClear')].forEach(b=>{b.disabled=!L.length});
+  $('#planSide').innerHTML=`<div class="psum"><div class="psum-hd"><span class="pcard-mark" aria-hidden="true">${esc(initials(pl.name))}</span><div><b>${esc(pl.name)}</b><span>${pl.sentAt?'Enviado ao encaixe em '+esc(dt(pl.sentAt)):'Ainda não enviado'}</span></div></div>
+    <dl class="psum-dl"><div><dt>Produtos</dt><dd>${esc(L.length)}</dd></div><div><dt>Unidades de produto</dt><dd>${esc(prods)}</dd></div><div><dt>Peças no encaixe</dt><dd>${esc(units)}</dd></div></dl>
+    ${pl.nestAt?`<div class="plan-saved"><b>Encaixe salvo</b><span>${esc(whenLabel(pl.nestAt))} · ${esc(pl.nestSheets||0)} chapa(s)</span>${pl.nestDef?`<small class="plan-def">${esc(pl.nestDef)}</small>`:''}<button type="button" data-plan-open>Abrir encaixe salvo</button></div>`:''}
+    <button type="button" class="pri" data-plan-send ${L.length?'':'disabled'}>Enviar para o encaixe</button>
+    <div class="msg">Enviar troca as peças da área de encaixe pelas deste planejamento. Depois, em Encaixar, confira chapa, espaço, margem, rotação e tempo.</div>
+    <button type="button" class="psum-del" data-del-plan="${esc(pl.id)}"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Excluir planejamento</button></div>`}
+function planSave(){autosave();renderPlan()}
+function newPlan(){let n=plans().length+1,name='PLANEJAMENTO-'+n;while(plans().some(p=>p.name===name))name='PLANEJAMENTO-'+(++n);
+  const p={id:nid('pl'),name,createdAt:new Date().toISOString(),items:[]};plans().push(p);PL.id=p.id;hist('plan.create',{id:p.id,name});planSave();
+  const el=$('#planName');el.focus();el.select()}
+async function deletePlan(id){const p=plans().find(x=>x.id===id);if(!p)return;
+  if(!await ask('Excluir o planejamento "'+p.name+'" ('+planItems(p).length+' produto(s))?\n\nOs produtos continuam na base; só o planejamento sai.','Excluir planejamento',true))return;
+  S.store.plans=plans().filter(x=>x!==p);if(PL.id===id)PL.id=null;hist('plan.delete',{id,name:p.name});planSave();toast('Planejamento '+p.name+' excluído.','ok')}
+$('#planNew').onclick=newPlan;
+$('#planSearch').addEventListener('input',renderPlan);
+$('#planFilter').addEventListener('input',renderPlan);
+$('#planBack').onclick=()=>{PL.id=null;renderPlan()};
+$('#planName').addEventListener('input',e=>{const pl=curPlan();if(!pl)return;pl.name=e.target.value.slice(0,120);autosave();const b=$('#planSide .psum-hd b');if(b)b.textContent=pl.name});
+$('#planName').addEventListener('change',e=>{const pl=curPlan();if(pl&&!pl.name.trim()){pl.name='Planejamento sem nome';e.target.value=pl.name;planSave()}});
+$('#planboard').addEventListener('click',e=>{
+  const o=e.target.closest('[data-plan]');if(o){PL.id=o.dataset.plan;renderPlan();return}
+  if(e.target.closest('[data-new-plan]')){newPlan();return}
+  const pl=curPlan();if(!pl)return;
+  const add=e.target.closest('[data-plan-add]');if(add){const it=planItems(pl);it.push({id:add.dataset.planAdd,qty:1,color:freeColor(new Set(it.map(r=>r.color.toLowerCase())))});planSave();return}
+  const del=e.target.closest('[data-plan-del]');if(del){const id=del.closest('[data-plan-row]').dataset.planRow;pl.items=planItems(pl).filter(r=>r.id!==id);planSave();return}
+  const mv=e.target.closest('[data-plan-mv]');if(mv){const it=planItems(pl),i=it.findIndex(r=>r.id===mv.closest('[data-plan-row]').dataset.planRow),j=i+(+mv.dataset.planMv);
+    if(i>=0&&j>=0&&j<it.length){[it[i],it[j]]=[it[j],it[i]];planSave()}}});
+function planOpt(k,v){const pl=curPlan();if(!pl)return;pl[k]=v;const mesa=curProj();if(mesa&&mesa.plan===pl.id)mesa[k]=v;planSave()}
+$('#planSeq').onchange=e=>planOpt('seq',e.target.checked);
+$('#planNear').onchange=e=>planOpt('near',e.target.checked);
+$('#planRows').addEventListener('change',e=>{const pl=curPlan(),cl=e.target.closest('[data-plan-color]');if(cl&&pl){const r=planItems(pl).find(x=>x.id===cl.closest('[data-plan-row]').dataset.planRow);if(!r)return;
+    const c=cl.value.toLowerCase(),dup=planItems(pl).find(x=>x!==r&&x.color.toLowerCase()===c);
+    if(dup){toast('Esta cor já é de '+((prodIdx().find(p=>p.id===dup.id)||{}).name||'outro produto')+' neste planejamento. Escolha outra.','bad');cl.value=r.color;return}
+    r.color=cl.value;planSave();return}
+  const el=e.target.closest('[data-plan-qty]');if(!el||!pl)return;const r=planItems(pl).find(x=>x.id===el.closest('[data-plan-row]').dataset.planRow);if(!r)return;
+  r.qty=Math.max(1,Math.min(100000,Math.round(+el.value||1)));planSave()});
+$('#planClear').onclick=async()=>{const pl=curPlan();if(pl&&await ask('Tirar todos os produtos de "'+pl.name+'"?','Limpar',true)){pl.items=[];planSave()}};
+async function sendPlan(){const pl=curPlan();if(!pl)return;const L=planItems(pl);if(!L.length)return;
+  await prodFlush();
+  const docs=[];for(const r of L){try{docs.push({r,d:await api('/api/product/'+r.id)})}catch(e){toast('Não foi possível ler o produto: '+e.message,'bad');return}}
+  const n=docs.reduce((a,{r,d})=>a+(d.parts||[]).reduce((q,p)=>q+Math.max(1,Math.round(num(p.qty,1)))*r.qty,0),0),old=S.parts.filter(p=>!p.guest).length;
+  if(!n){toast('Os produtos deste planejamento não têm peças.','bad');return}
+  if(!await ask(`Enviar "${pl.name}" para o encaixe: ${n} peça(s) de ${L.length} produto(s)?`+(old?`\n\nAs ${old} peça(s) que estão hoje na área de encaixe saem e o encaixe calculado é descartado.`:''),'Enviar',!!old))return;
+  cancelNest();
+  const parts=[];let uid=0;
+  for(const[rank,{r,d}]of docs.entries()){const pn=String(d.name||'Produto');
+    for(const p0 of d.parts||[]){const p=normPart(p0);
+      parts.push({...p,id:++uid,qty:p.qty*r.qty,on:true,mirror:!!p0.mirror,rot:PROD_ROT.some(x=>x[0]===p0.rot)?p0.rot:'auto',gap:p0.gap==null?null:Math.max(0,num(p0.gap,0)),mar:p0.mar==null?null:Math.max(0,num(p0.mar,0)),
+        name:pn+' · '+p.name,groupId:'',color:r.color,pick:false,fileId:'',projectId:S.projectId,product:r.id,rank})}}
+  S.parts=parts;S.uid=uid;S.files=[];S.links=[];S.res=null;S.snap=null;S.pdf=null;S.savedNest=null;
+  pl.sentAt=new Date().toISOString();const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false}   // nome no relatório/exportação; Salvar encaixe grava neste planejamento
+  hist('plan.send',{id:pl.id,name:pl.name,products:L.map(r=>({id:r.id,name:(prodIdx().find(p=>p.id===r.id)||{}).name,qty:r.qty})),parts:n});
+  render();autosave();showView('encaixe');toast(n+' peça(s) de '+pl.name+' no encaixe. Confira a configuração e clique em Encaixar.','ok')}
+$('#planSend').onclick=()=>sendPlan().catch(e=>toast(e.message,'bad'));
+document.addEventListener('click',e=>{if(e.target.closest('[data-plan-open]'))openPlanNest().catch(x=>toast(x.message,'bad'));if(e.target.closest('[data-plan-send]'))sendPlan().catch(x=>toast(x.message,'bad'));const d=e.target.closest('[data-del-plan]');if(d)deletePlan(d.dataset.delPlan).catch(x=>toast(x.message,'bad'))});
+
+/* Abre o encaixe salvo do planejamento: peças, chapas e posições voltam para a área de encaixe. */
+async function openPlanNest(){const pl=curPlan();if(!pl||!pl.nestAt)return;
+  const old=S.parts.filter(p=>!p.guest).length,same=(curProj()||{}).plan===pl.id;
+  if(old&&!same&&!await ask('Abrir o encaixe salvo de "'+pl.name+'"? As '+old+' peça(s) da área de encaixe saem.','Abrir',true))return;
+  let d;try{d=await api('/api/plan/'+pl.id)}catch(e){toast(e.message,'bad');return}
+  if(!d.nest||!Array.isArray(d.parts)){toast('Este planejamento não tem encaixe salvo no servidor.','bad');return}
+  cancelNest();
+  S.parts=d.parts.map(p=>({...normPart(p),gap:p.gap==null?null:num(p.gap,0),mar:p.mar==null?null:num(p.mar,0),rank:num(p.rank,0)}));S.uid=Math.max(0,num(d.uid,0),...S.parts.map(p=>p.id));
+  S.groups={};for(const k in d.groups||{}){const g=d.groups[k]||{};S.groups[k]={w:num(g.w,3000),h:num(g.h,1250)}}
+  S.seq=d.seq||{};S.files=[];S.links=[];S.savedNest=d.nest;S.res=null;S.snap=null;S.pdf=null;
+  const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false}
+  if(!openSavedNest(false)){render();autosave();return}
+  render();autosave();showView('encaixe');showResult();toast('Encaixe de '+pl.name+' aberto.','ok')}

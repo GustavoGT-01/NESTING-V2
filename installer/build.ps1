@@ -20,7 +20,7 @@ Pop-Location
 # 2) servidor: codigo, pagina e motor
 if (Test-Path $app) { Remove-Item $app -Recurse -Force }
 New-Item -ItemType Directory -Force $srv | Out-Null
-foreach ($f in "server.py", "store.py", "engine.py", "nest.py", "eps.py", "index.html", "app.js", "README.md") {
+foreach ($f in "server.py", "store.py", "engine.py", "nest.py", "eps.py", "cam.py", "index.html", "app.js", "sim.js", "README.md") {
     Copy-Item (Join-Path $root $f) $srv
 }
 Copy-Item (Join-Path $root "motor\target\release\motor.exe") $srv

@@ -137,6 +137,25 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 /* ---------- modais, tabela de revisão, relatório e avisos ---------- */
 .modal{position:fixed;inset:0;z-index:40;background:rgba(4,8,12,.72);display:grid;place-items:center;padding:16px;overscroll-behavior:contain;animation:fade .16s}.modal[hidden]{display:none}
 .modal .box{width:min(980px,100%);max-height:min(92vh,980px);overflow:auto;overscroll-behavior:contain;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4);box-shadow:var(--sh);animation:pop .22s var(--ease)}
+/* ---------- simulação ---------- */
+.modal.sim{padding:12px}
+.simbox{width:min(1600px,100%);height:min(96vh,1100px);background:var(--sf);border:1px solid var(--ln);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--sh);animation:pop .22s var(--ease)}
+.sim-hd,.sim-ft{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--ln)}
+.sim-ft{border-bottom:0;border-top:1px solid var(--ln)}
+.sim-hd h2{font-size:16px;font-weight:650;margin-right:auto}
+.sim-hd .f.inl,.sim-ft .f.inl{flex-direction:row;align-items:center;gap:8px;font-size:13px}.sim-hd select,.sim-ft select{width:auto}
+.sim-hd input[type=color]{width:38px;height:30px;padding:2px}
+.sim-custom{display:flex;gap:8px}.sim-custom[hidden]{display:none}
+.seg{display:inline-flex;border:1px solid var(--ln);border-radius:var(--r2);overflow:hidden}.seg button{border:0;border-radius:0;min-width:48px}
+.seg button[aria-pressed=true]{background:var(--ac);color:var(--on)}
+.sim-area{position:relative;flex:1;min-height:0;background:#0b0f14;touch-action:none;cursor:grab}.sim-area:active{cursor:grabbing}
+.sim-area canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.sim-area canvas[hidden]{display:none}
+.sim-hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--mu);pointer-events:none}
+#simSeek{flex:1 1 240px;min-width:160px}
+.sim-time{font-variant-numeric:tabular-nums;font-size:14px;color:var(--mu)}.sim-time b{color:var(--tx)}
+.sim-info{display:flex;flex-wrap:wrap;gap:6px 16px;padding:0 14px 12px;font-size:13px;color:var(--mu)}
+.sim-info code{color:var(--tx);overflow-wrap:anywhere}.sim-warn{color:var(--bad);font-weight:600}.sim-warn:empty,#simInfo:empty{display:none}
+@media (max-width:700px){.modal.sim{padding:0}.simbox{height:100vh;border-radius:0}}
 .modal .box.ask{width:min(480px,100%)}.modal .box.sm{width:min(460px,100%)}
 .modal-hd{display:flex;justify-content:space-between;align-items:center;gap:8px}.modal h2{font-size:18px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
 #askText{white-space:pre-line;font-size:15px;line-height:1.55}
@@ -167,6 +186,52 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .mhead{display:flex;align-items:center;gap:2px}.mhead .mrow{flex:1;min-width:0}
 .medit{width:34px;height:34px;padding:0;background:transparent;border-color:transparent;color:var(--mu)}.medit[aria-expanded=true]{color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent)}
 .mbody{margin:4px 0 10px 22px;animation:in .22s var(--ease)}
+/* ---------- planejamento ---------- */
+#planHome,#planDetail{display:flex;flex-direction:column;gap:var(--s4)}#planHome[hidden],#planDetail[hidden]{display:none}
+.prod-title #planBack{background:transparent;border-color:transparent;color:var(--mu);padding:6px 8px;gap:4px;margin:0}.prod-title #planBack .ic{transform:rotate(180deg)}.prod-title #planSend{margin-left:auto}
+.plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:var(--s4);align-items:start}
+.plan-col{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.plan-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.plan-hd b{font-size:15px}.plan-hd input{flex:1 1 160px;margin-left:auto;max-width:260px}.plan-hd button{margin-left:auto}
+.plan-list{display:flex;flex-direction:column;gap:6px}
+.plan-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--ln);border-radius:var(--r2);background:var(--bg2)}
+.plan-item .pcard-mark{width:36px;height:36px;font-size:13px}
+.plan-item span{display:flex;flex-direction:column;min-width:0}.plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.plan-item small{color:var(--mu);font-size:12px}
+.plan-item.in{opacity:.55}
+.plan-row{grid-template-columns:auto auto minmax(0,1fr) 44px 92px auto}
+.plan-ord{display:flex;flex-direction:column;gap:2px;align-items:center}.plan-ord button{width:26px;height:20px;padding:0;font-size:11px;line-height:1}.plan-ord b{font-size:11px;color:var(--mu);font-weight:600}
+.plan-opts{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:var(--r2);background:var(--bg2);font-size:13px}
+.plan-row input[type=color]{width:44px;height:36px;padding:3px;cursor:pointer}
+.plan-def{color:var(--mu);font-size:12px;line-height:1.5}
+.plan-saved{display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--ok) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ok) 35%,var(--ln));border-radius:var(--r2);padding:10px 12px;font-size:13px}
+.plan-row input{text-align:center}
+@media (max-width:900px){.plan{grid-template-columns:1fr}}
+/* ---------- produtos ---------- */
+#prodHome,#prodDetail{display:flex;flex-direction:column;gap:var(--s4)}#prodHome[hidden],#prodDetail[hidden]{display:none}
+.prod-title{align-items:center}.prod-title #prodBack{background:transparent;border-color:transparent;color:var(--mu);padding:6px 8px;gap:4px;margin:0}.prod-title #prodBack .ic{transform:rotate(180deg)}
+.prod-title #prodImport{margin-left:auto}
+.prod-name{flex:1 1 320px;min-width:min(100%,260px);max-width:560px;font-size:22px;font-weight:650;background:transparent;border-color:transparent;padding:4px 8px}.prod-name:hover,.prod-name:focus{border-color:var(--ln2);background:var(--fld)}
+.pgroups{display:flex;flex-direction:column;gap:var(--s5)}
+.pgroup{display:flex;flex-direction:column;gap:var(--s3)}
+.pgroup-hd{display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--ln)}
+.pgroup-hd b{font-size:16px;font-weight:650}.pgroup-hd span{font-size:13px;color:var(--mu)}
+.mat-dot{width:12px;height:12px;border-radius:4px;background:var(--mc);flex:none}
+.mat-chips{display:flex;flex-wrap:wrap;gap:6px}.mat-chips:empty{display:none}
+.mat-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:99px;font-size:13px}
+.mat-chip[aria-pressed=true]{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--sf));color:var(--tx)}
+.mat-chip small{color:var(--mu)}
+.ppart{border-top:3px solid var(--mc,var(--ln))}
+.ptiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--s3)}
+#impModal.prod label:has([data-k="model"]),#impModal.prod label:has([data-b="model"]){display:none}   /* produto não usa modelo */
+.ppart{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;animation:in .3s var(--ease) both;animation-delay:calc(min(var(--i),14) * 24ms)}
+.ppart:hover{border-color:var(--ln2)}
+.ppart-art{height:120px;display:flex;align-items:center;justify-content:center;background:var(--sheet);border-radius:var(--r2)}
+.ppart-art svg{width:100%;height:100%;padding:10px}.ppart-art.mi svg{transform:scaleX(-1)}
+.ppart-name{font-weight:650;background:transparent;border-color:transparent;padding:4px 6px}.ppart-name:hover,.ppart-name:focus{border-color:var(--ln2);background:var(--fld)}
+.ppart-meta{font-size:12px;color:var(--mu);padding:0 6px}
+.ppart-ctl{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
+.ppart-ctl .f{gap:4px;font-size:12px}
+.ppart-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ppart-foot .pcard-del{opacity:.7}
 /* ---------- quadro de projetos ---------- */
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-content:start;align-items:start}
 .pcard{position:relative;display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--sf);border:1px solid transparent;border-radius:12px;transition:transform .18s var(--ease),background-color .18s,border-color .18s}
@@ -196,8 +261,29 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .psum-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.psum-links b{width:100%;font-size:13px}.psum-links .tag{margin:0}
 /* ---------- quadro de peças (área central) ---------- */
 .board{display:none;flex-direction:column;gap:var(--s4);padding:var(--s5);flex:1}
-main[data-view="pecas"] #board,main[data-view="projetos"] #pboard{display:flex}
-main[data-view="pecas"] .viewbar,main[data-view="pecas"] #stage,main[data-view="projetos"] .viewbar,main[data-view="projetos"] #stage{display:none}
+/* ---------- usinagem CNC ---------- */
+main[data-view="cnc"] #cboard{display:flex}
+main[data-view="cnc"] .viewbar,main[data-view="cnc"] #stage{display:none}
+.cnc{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--s4);align-items:start}
+.cnc-view{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px;min-height:320px;display:flex;align-items:center;justify-content:center}
+.cnc-view svg{width:100%;height:auto;max-height:calc(100vh - 260px)}
+.cnc-side{display:flex;flex-direction:column;gap:12px}
+.cnc-legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--mu)}
+.cnc-legend .lg::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle;background:currentColor}
+.lg.ext{color:var(--ac)}.lg.int{color:var(--alt)}.lg.poc{color:var(--ok)}.lg.dri{color:var(--warn)}.lg.tab{color:#f472b6}
+.cnc-legend .lg{color:var(--mu)}.cnc-legend .lg.ext::before{background:var(--ac)}.cnc-legend .lg.int::before{background:var(--alt)}.cnc-legend .lg.poc::before{background:var(--ok)}.cnc-legend .lg.dri::before{background:var(--warn)}.cnc-legend .lg.tab::before{background:#f472b6}
+.cnc-warn:empty,.cnc-files:empty{display:none}
+.cnc-warn{font-size:13px;color:var(--warn);display:flex;flex-direction:column;gap:4px;background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:var(--r2);padding:10px 12px}
+.cnc-files{display:flex;flex-direction:column;gap:6px;font-size:13px}.cnc-files code{color:var(--tx);overflow-wrap:anywhere}
+.tool-list{display:flex;flex-direction:column;gap:6px}
+.tool-item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;justify-content:stretch;padding:8px 10px}
+.tool-item .tn{font-weight:650;color:var(--ac);font-variant-numeric:tabular-nums}.tool-item span{display:flex;flex-direction:column;min-width:0}.tool-item small{color:var(--mu);font-size:12px}
+.tool-item.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--sf))}
+.tool-ed{display:flex;flex-direction:column;gap:var(--s3)}
+@media (max-width:900px){.cnc{grid-template-columns:1fr}}
+
+main[data-view="pecas"] #board,main[data-view="produtos"] #prodboard,main[data-view="planejamento"] #planboard{display:flex}
+main[data-view="pecas"] .viewbar,main[data-view="pecas"] #stage,main[data-view="produtos"] .viewbar,main[data-view="produtos"] #stage,main[data-view="planejamento"] .viewbar,main[data-view="planejamento"] #stage{display:none}
 .board.enter .tile,.board.enter .pcard{animation:in .36s var(--ease) both;animation-delay:calc(min(var(--i),14) * 28ms)}
 .board-hd{display:flex;flex-direction:column;gap:12px}
 .board-title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.board-title button{margin-left:auto;align-self:center}.board-title h2{font-size:24px;font-weight:650;letter-spacing:-.015em}.board-title .cnt{margin:0}
@@ -286,7 +372,7 @@ input[type=checkbox]{width:20px;height:20px}input[type=color]{width:40px;height:
 .imp-fields{grid-template-columns:1fr}.imp-hd{flex-wrap:wrap}.imp-st{max-width:none;justify-content:flex-start}}
 /* Troca de tela: painel e área central. Chapas só com .sheets-in. Vazio só nessa troca. */
 main.view-in .sec:not([hidden]),main.view-in .stage,main.view-in .viewbar{animation:in .22s var(--ease)}
-main.view-in[data-view="pecas"] #board,main.view-in[data-view="projetos"] #pboard{animation:in .22s var(--ease)}
+main.view-in[data-view="pecas"] #board,main.view-in[data-view="produtos"] #prodboard{animation:in .22s var(--ease)}
 .stage.sheets-in .sheetbox{animation:in .32s var(--ease) both;animation-delay:calc(var(--i,0) * 40ms)}
 main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -300,6 +386,9 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
   <symbol id="i-parts" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17" cy="6.5" r="3.5"/><path d="M6.5 14 10 20H3zM14 14h7v6h-7z"/></symbol>
   <symbol id="i-models" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/></symbol>
   <symbol id="i-nest" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h8V4M11 10v10M11 14h10"/></symbol>
+  <symbol id="i-plan" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M8 11h8M8 15h8M8 19h5"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7zM4 7l8 4 8-4M12 11v10"/></symbol>
+  <symbol id="i-cnc" viewBox="0 0 24 24"><path d="M9 3h6v4H9zM10 7v4l2 2 2-2V7M12 13v3m-2 1 2 4 2-4m-8 4h12"/></symbol>
   <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
   <symbol id="i-presets" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
@@ -314,15 +403,13 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
 <nav class="rail" aria-label="Etapas do trabalho">
   <div class="brand"><svg class="ic" aria-hidden="true"><use href="#i-mark"/></svg><h1 class="logo">Encaixe<b>/</b>Chapa</h1></div>
   <div class="navgrp"><span class="navlbl">Início</span>
-    <button type="button" class="nav on" data-view="projetos" data-tip="Projetos" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><span>Projetos</span></button>
-  </div>
-  <div class="navgrp"><span class="navlbl">Preparação</span>
-    <button type="button" class="nav" data-view="import" data-tip="Importar"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg><span>Importar</span></button>
-    <button type="button" class="nav" data-view="pecas" data-tip="Modelos e peças"><svg class="ic" aria-hidden="true"><use href="#i-parts"/></svg><span>Modelos e peças</span></button>
+    <button type="button" class="nav on" data-view="produtos" data-tip="Produtos" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg><span>Produtos</span></button>
   </div>
   <div class="navgrp"><span class="navlbl">Produção</span>
+    <button type="button" class="nav" data-view="planejamento" data-tip="Planejamento"><svg class="ic" aria-hidden="true"><use href="#i-plan"/></svg><span>Planejamento</span></button>
     <button type="button" class="nav" data-view="encaixe" data-tip="Encaixar"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg><span>Encaixar</span></button>
     <button type="button" class="nav" data-view="export" data-tip="Exportar"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg><span>Exportar</span></button>
+    <button type="button" class="nav" data-view="cnc" data-tip="Usinagem CNC"><svg class="ic" aria-hidden="true"><use href="#i-cnc"/></svg><span>Usinagem CNC</span></button>
   </div>
   <div class="navgrp"><span class="navlbl">Configurações</span>
     <button type="button" class="nav" data-view="presets" data-tip="Presets"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><span>Presets</span></button>
@@ -332,18 +419,18 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
   </div>
 </nav>
 <header class="top">
-  <div class="crumb">Projetos<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></div>
-  <div class="projbar"><select id="proj" aria-label="Projeto"></select><button type="button" id="projNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
   <span class="tag inf" id="linkTag" hidden></span>
   <div class="sp"></div>
   <div class="saved" id="saved" role="status"></div><div class="kpi" id="kpi">sem peças</div>
   <button class="pri" id="go" type="button" disabled>Encaixar</button>
 </header>
-<main data-view="projetos">
+<main data-view="produtos">
 <aside class="panel" id="panel" aria-label="Painel de apoio">
-  <section class="sec" data-view="projetos"><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><h2>Projeto aberto</h2></header><div class="body">
-    <div id="projSummary"></div>
-    <div class="msg ok" id="linkInfo"></div>
+  <section class="sec" data-view="planejamento" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-plan"/></svg><h2>Planejamento</h2></header><div class="body">
+    <div id="planSide"></div>
+  </div></section>
+  <section class="sec" data-view="produtos"><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg><h2>Produto</h2></header><div class="body">
+    <div id="prodSide"></div>
   </div></section>
   <section class="sec" data-view="import" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg><h2>Importar</h2><span class="cnt" id="projInfo"></span></header><div class="body">
     <label class="drop" id="drop"><input id="file" type="file" accept=".dxf,.dwg,.svg" multiple hidden>
@@ -419,6 +506,52 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     </div>
   
   </div></section>
+  <section class="sec" data-view="cnc" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-cnc"/></svg><h2>Usinagem CNC</h2></header><div class="body">
+    <details open><summary class="sub">Máquina e pós-processador</summary><div class="subbody">
+      <label class="f">Pós-processador<select data-cm="post.name"><option>NCStudio (mm)</option></select></label>
+      <label class="f">Troca de ferramenta<select data-cm="machine.atc" data-bool><option value="0">Manual: um arquivo por ferramenta</option><option value="1">Automática (ATC): T M06</option></select></label>
+      <div class="row"><label class="f">Zero Z<select data-cm="machine.zero"><option value="topo">Topo da chapa</option><option value="mesa">Mesa (sacrifício)</option></select></label>
+        <label class="f">Altura segura (mm)<input type="number" step="1" min="1" max="200" data-cm="machine.safe"></label></div>
+      <div class="row"><label class="f">Passar da chapa (mm)<input type="number" step="0.1" min="0" max="5" data-cm="machine.over"></label>
+        <label class="f">Deslocamento rápido (mm/min)<input type="number" step="500" min="100" data-cm="machine.rapid"></label></div>
+      <div class="row"><label class="f">Volta para X (mm)<input type="number" step="10" data-cm="machine.home_x"></label><label class="f">Volta para Y (mm)<input type="number" step="10" data-cm="machine.home_y"></label></div>
+      <div class="msg">Origem X0 Y0 no canto inferior esquerdo da chapa. "Passar da chapa" é quanto a fresa entra na mesa de sacrifício para soltar a peça.</div>
+      <details><summary class="sub">Editar o pós-processador</summary><div class="subbody">
+        <label class="f">Início do arquivo<textarea rows="2" data-cm="post.header" spellcheck="false"></textarea></label>
+        <label class="f">Troca automática<textarea rows="2" data-cm="post.toolchange" spellcheck="false"></textarea></label>
+        <label class="f">Ligar o spindle (troca manual)<textarea rows="1" data-cm="post.spindle" spellcheck="false"></textarea></label>
+        <label class="f">Fim do arquivo<textarea rows="4" data-cm="post.footer" spellcheck="false"></textarea></label>
+        <div class="row"><label class="f">Extensão<input data-cm="post.ext" maxlength="6"></label><label class="f chk"><input type="checkbox" data-cm="post.comments"> Comentários ( )</label></div>
+        <div class="msg">Variáveis: {T} {RPM} {SAFEZ} {HOMEX} {HOMEY} {TOOLNAME} {DIA}.</div>
+        <button type="button" id="cPostReset">Restaurar NCStudio padrão</button>
+      </div></details>
+    </div></details>
+    <details open><summary class="sub">Ferramentas</summary><div class="subbody">
+      <div class="tool-list" id="cTools"></div>
+      <div class="tool-ed" id="cToolEd">
+        <label class="f">Nome<input data-ct="name" maxlength="80"></label>
+        <div class="row"><label class="f">Tipo<select data-ct="kind"><option value="fresa">Fresa</option><option value="broca">Broca</option></select></label><label class="f">Nº na máquina (T)<input type="number" min="1" max="99" step="1" data-ct="num"></label></div>
+        <div class="row"><label class="f">Diâmetro (mm)<input type="number" min="0.1" max="100" step="0.1" data-ct="dia"></label><label class="f">Cortes (dentes)<input type="number" min="1" max="8" step="1" data-ct="flutes"></label></div>
+        <div class="row"><label class="f">Rotação (RPM)<input type="number" min="100" max="60000" step="500" data-ct="rpm"></label><label class="f">Avanço (mm/min)<input type="number" min="1" max="60000" step="100" data-ct="feed"></label></div>
+        <div class="row"><label class="f">Mergulho (mm/min)<input type="number" min="1" max="60000" step="100" data-ct="plunge"></label><label class="f">Passo vertical (mm)<input type="number" min="0.05" max="100" step="0.5" data-ct="step"></label></div>
+        <label class="f">Sobreposição no rebaixo (%)<input type="number" min="5" max="95" step="5" data-ct="stepover"></label>
+        <div class="msg" id="cChip"></div>
+      </div>
+      <div class="btns"><button type="button" id="cToolNew">Nova ferramenta</button><button type="button" id="cToolDel">Excluir</button></div>
+    </div></details>
+    <details open><summary class="sub">Estratégia de corte</summary><div class="subbody">
+      <div class="row"><label class="f">Contorno<select data-cm="strategy.profile_tool" class="c-tools"></select></label><label class="f">Rebaixo<select data-cm="strategy.pocket_tool" class="c-tools"></select></label></div>
+      <div class="row"><label class="f">Sentido<select data-cm="strategy.dir"><option value="climb">Concordante</option><option value="conv">Discordante</option></select></label>
+        <label class="f">Rampa de entrada (mm)<input type="number" min="0" max="500" step="5" data-cm="strategy.ramp"></label></div>
+      <label class="f chk"><input type="checkbox" data-cm="strategy.small_first"> Mesa de vácuo: peças pequenas primeiro (furos e rebaixos sempre antes)</label>
+      <label class="f chk"><input type="checkbox" data-cm="strategy.drill"> Furar furos redondos com a broca do mesmo diâmetro</label>
+      <label class="f">Descida por bicada na furação (mm, 0 = direto)<input type="number" min="0" max="100" step="1" data-cm="strategy.peck"></label>
+      <label class="f chk"><input type="checkbox" data-cm="strategy.tabs"> Micro-juntas para segurar peças pequenas</label>
+      <div class="row"><label class="f">Em peças menores que (cm²)<input type="number" min="0" step="10" data-cm="strategy.tab_cm2"></label><label class="f">Quantidade por peça<input type="number" min="0" max="20" step="1" data-cm="strategy.tab_count"></label></div>
+      <div class="row"><label class="f">Largura (mm)<input type="number" min="0.5" max="50" step="0.5" data-cm="strategy.tab_w"></label><label class="f">Altura (mm)<input type="number" min="0.2" max="50" step="0.2" data-cm="strategy.tab_h"></label></div>
+      <div class="msg">Rebaixo e furo cego vêm das camadas do DXF, como no Aspire e no Alphacam: contorno na camada <b>REBAIXO_5</b> = rebaixo de 5 mm; <b>FURO_10</b> = furo de 10 mm de profundidade. Os demais contornos internos são furos passantes.</div>
+    </div></details>
+  </div></section>
   <section class="sec" data-view="presets" hidden><header class="sh"><svg class="ic" aria-hidden="true"><use href="#i-presets"/></svg><h2>Presets de encaixe</h2></header><div class="body">
     <label class="f">Nome do preset<input id="presetName" autocomplete="off" maxlength="80" placeholder="Ex.: MDF 15 mm"></label>
     <div class="row"><label class="f">Material<input id="presetMat" list="mats" autocomplete="off" maxlength="60" placeholder="Ex.: MDF"></label><label class="f">Espessura (mm)<input id="presetTh" type="number" step="0.1" min="0.1"></label></div>
@@ -442,13 +575,68 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <div class="zoom" role="group" aria-label="Zoom das chapas"><button type="button" class="icon" id="zOut" aria-label="Diminuir zoom" title="Diminuir zoom"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button><output id="zVal">Ajustado</output><button type="button" class="icon" id="zIn" aria-label="Aumentar zoom" title="Aumentar zoom"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button><button type="button" class="icon" id="zFit" aria-label="Ajustar à tela" title="Ajustar à tela"><svg class="ic" aria-hidden="true"><use href="#i-fit"/></svg></button></div>
   </div>
   <div class="runbar"><div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><div class="msg" id="progTxt"></div><button type="button" id="stopNest">Parar e ficar com o melhor até agora</button></div><div class="msg" id="nmsg"></div></div>
-  <section class="board" id="pboard" aria-label="Projetos">
+  <section class="board" id="cboard" aria-label="Usinagem CNC">
     <header class="board-hd">
-      <div class="board-title"><h2>Projetos</h2><span class="cnt" id="pjCount"></span><button type="button" class="pri" id="projNew2"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo projeto</button></div>
-      <div class="board-tools"><input id="projFilter" type="search" autocomplete="off" placeholder="Buscar por código, produto, OP ou lote…" aria-label="Buscar projeto"></div>
-      <div class="msg">Clique num projeto para abri-lo. "Juntar ao encaixe" soma as peças de outro projeto ao encaixe do projeto aberto.</div>
+      <div class="board-title"><h2>Usinagem CNC</h2><span class="cnt" id="cCount"></span><button type="button" class="pri" id="cGen"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg>Gerar G-code</button></div>
+      <div class="board-tools"><select id="cGroup" aria-label="Material e espessura"></select><select id="cSheet" aria-label="Chapa"></select><button type="button" id="cCalc">Recalcular caminhos</button><button type="button" id="cSim">Simular 2D / 3D</button></div>
+      <div class="msg" id="cMsg"></div>
     </header>
-    <div class="pgrid" id="projList"></div>
+    <div class="cnc">
+      <div class="cnc-view" id="cPrev"></div>
+      <aside class="cnc-side">
+        <dl class="psum-dl" id="cStats"></dl>
+        <div class="cnc-legend"><span class="lg ext">Contorno externo</span><span class="lg int">Contorno interno</span><span class="lg poc">Rebaixo</span><span class="lg dri">Furação</span><span class="lg tab">Micro-junta</span></div>
+        <div class="cnc-warn" id="cWarn"></div>
+        <div class="cnc-files" id="cFiles"></div>
+      </aside>
+    </div>
+  </section>
+  <section class="board" id="planboard" aria-label="Planejamento">
+    <div id="planHome">
+      <header class="board-hd">
+        <div class="board-title"><h2>Planejamento</h2><span class="cnt" id="planCount"></span><button type="button" class="pri" id="planNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo planejamento</button></div>
+        <div class="board-tools"><input id="planSearch" type="search" autocomplete="off" placeholder="Buscar planejamento…" aria-label="Buscar planejamento"></div>
+        <div class="msg">Cada planejamento junta produtos e quantidades (ex.: PLANEJAMENTO-LOTE1010). Abra um para editar e enviar ao encaixe.</div>
+      </header>
+      <div class="pgrid" id="planCards"></div>
+    </div>
+    <div id="planDetail" hidden>
+      <header class="board-hd">
+        <div class="board-title prod-title"><button type="button" id="planBack" aria-label="Voltar para os planejamentos"><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg>Planejamentos</button>
+          <input id="planName" class="prod-name" maxlength="120" autocomplete="off" aria-label="Nome do planejamento"><span class="cnt" id="planInfo"></span>
+          <button type="button" class="pri" id="planSend"><svg class="ic" aria-hidden="true"><use href="#i-nest"/></svg>Enviar para o encaixe</button></div>
+        <div class="msg">As peças entram no encaixe multiplicadas pela quantidade de cada produto, com o giro, espelhamento, espaço e margem de cada peça.</div>
+      </header>
+      <div class="plan">
+        <div class="plan-col"><div class="plan-hd"><b>Produtos</b><input id="planFilter" type="search" autocomplete="off" placeholder="Buscar produto…" aria-label="Buscar produto"></div><div class="plan-list" id="planCat"></div></div>
+        <div class="plan-col"><div class="plan-hd"><b>No planejamento</b><button type="button" id="planClear">Limpar</button></div>
+          <div class="plan-opts">
+            <label class="f chk"><input type="checkbox" id="planSeq"> Encaixar na ordem da lista (use ↑ ↓ para ordenar os produtos)</label>
+            <label class="f chk"><input type="checkbox" id="planNear"> Manter as peças de cada produto juntas: mesma chapa ou chapas vizinhas</label>
+          </div>
+          <div class="plan-list" id="planRows"></div></div>
+      </div>
+    </div>
+  </section>
+  <section class="board" id="prodboard" aria-label="Produtos">
+    <div id="prodHome">
+      <header class="board-hd">
+        <div class="board-title"><h2>Produtos</h2><span class="cnt" id="prodCount"></span><button type="button" class="pri" id="prodNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Novo produto</button></div>
+        <div class="board-tools"><input id="prodFilter" type="search" autocomplete="off" placeholder="Buscar produto…" aria-label="Buscar produto"></div>
+        <div class="msg">Base de produtos: cada produto guarda as peças importadas, com quantidade, giro e espelhamento.</div>
+      </header>
+      <div class="pgrid" id="prodList"></div>
+    </div>
+    <div id="prodDetail" hidden>
+      <header class="board-hd">
+        <div class="board-title prod-title"><button type="button" id="prodBack" aria-label="Voltar para os produtos"><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg>Produtos</button>
+          <input id="prodName" class="prod-name" maxlength="120" autocomplete="off" aria-label="Nome do produto"><span class="cnt" id="prodInfo"></span>
+          <button type="button" class="pri" id="prodImport"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg>Importar peças</button></div>
+        <input id="prodFile" type="file" accept=".dxf,.dwg,.svg" multiple hidden>
+      </header>
+      <div class="mat-chips" id="prodMats" role="group" aria-label="Filtrar por material"></div>
+      <div class="pgroups" id="prodParts"></div>
+    </div>
   </section>
   <section class="board" id="board" aria-label="Peças do projeto">
     <header class="board-hd">
@@ -478,16 +666,6 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <div class="btns"><button type="button" id="askNo">Cancelar</button><button type="button" class="pri" id="askYes">Continuar</button></div>
   </div>
 </div>
-<div class="modal" id="projModal" hidden>
-  <div class="box sm" role="dialog" aria-modal="true" aria-labelledby="projTitle">
-    <h2 id="projTitle">Novo projeto</h2>
-    <label class="f">Código do projeto *<input id="pjCode" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Ex.: POLTRONA-A"></label>
-    <label class="f">Produto *<input id="pjProd" autocomplete="off" maxlength="80" placeholder="Ex.: Poltrona modelo A"></label>
-    <div class="row"><label class="f">Ordem de produção<input id="pjOrd" autocomplete="off" spellcheck="false" maxlength="40"></label><label class="f">Lote<input id="pjLot" autocomplete="off" spellcheck="false" maxlength="40"></label></div>
-    <div class="msg w" id="pjErr"></div>
-    <div class="btns"><button type="button" id="pjNo">Cancelar</button><button type="button" class="pri" id="pjOk">Criar projeto</button></div>
-  </div>
-</div>
 <div class="modal" id="impModal" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="impTitle">
     <div class="modal-hd"><h2 id="impTitle">Revisar importação</h2></div>
@@ -498,6 +676,26 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
   </div>
 </div>
 <div id="toast" class="toast" hidden role="status"></div>
+<div class="modal sim" id="simModal" hidden>
+  <div class="simbox" role="dialog" aria-modal="true" aria-labelledby="simTitle">
+    <div class="sim-hd"><h2 id="simTitle">Simulação</h2>
+      <div class="seg" role="group" aria-label="Vista"><button type="button" data-simmode="2d" aria-pressed="true">2D</button><button type="button" data-simmode="3d" aria-pressed="false">3D</button></div>
+      <label class="f inl">Material<select id="simMat"></select></label>
+      <span class="sim-custom" id="simCustom" hidden><label class="f inl">Face<input type="color" id="simTop"></label><label class="f inl">Miolo<input type="color" id="simCore"></label></span>
+      <label class="f chk"><input type="checkbox" id="simPath" checked> Caminhos</label>
+      <button type="button" id="simFit">Enquadrar</button>
+      <button type="button" id="simX">Fechar</button></div>
+    <div class="sim-area" id="simArea"><canvas id="sim2d" aria-label="Simulação vista de cima"></canvas><canvas id="sim3d" hidden aria-label="Simulação em 3D"></canvas><div class="sim-hint" id="simHint"></div></div>
+    <div class="sim-ft">
+      <button type="button" id="simStart">Início</button><button type="button" class="pri" id="simPlay">Simular</button><button type="button" id="simEnd">Fim</button>
+      <label class="f inl">Velocidade<select id="simSpeed"><option value="1">1× (tempo real)</option><option value="5">5×</option><option value="20">20×</option><option value="100">100×</option><option value="500">500×</option></select></label>
+      <input type="range" id="simSeek" min="0" max="1000" value="0" aria-label="Posição da simulação">
+      <span class="sim-time"><b id="simNow">0:00</b> / <span id="simTotal">0:00</span></span>
+    </div>
+    <div class="sim-info"><span id="simTool"></span><code id="simLine"></code><span class="sim-warn" id="simWarn"></span><span id="simInfo"></span></div>
+  </div>
+</div>
 <script src="/app.js"></script>
+<script src="/sim.js"></script>
 </body>
 </html>

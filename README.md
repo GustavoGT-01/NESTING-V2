@@ -6,14 +6,15 @@ Roda no seu computador, sem instalar bibliotecas: o servidor usa só a bibliotec
 
 ## O que faz
 
-- **Projetos separados.** Cada projeto tem as suas peças, arquivos de origem e sequência de exportação.
-- **Importação em lote com revisão.** Aceita DXF, DWG e SVG. Antes de importar, mostra peças encontradas, material, espessura, modelo e avisos de cada arquivo.
+- **Produtos (base de produtos).** Cada produto tem nome e as peças importadas (DXF, DWG e SVG, com SPLINE e ELLIPSE), com quantidade, giro, espelhamento, material e espessura, e espaço entre peças e margem da chapa próprios (vazio = os do encaixe). As peças aparecem separadas por material e espessura.
+- **Planejamento (banco de planejamentos).** Cada planejamento (ex.: PLANEJAMENTO-LOTE1010) junta produtos e quantidades, com uma cor por produto que não se repete no planejamento. Opções: encaixar na ordem da lista e manter as peças de cada produto juntas (mesma chapa ou chapas vizinhas). "Enviar para o encaixe" leva as peças multiplicadas pelas quantidades.
+- **Encaixe salvo no planejamento**, com toda a definição usada (espaço, margem, rotação, resolução, tempo, opções e chapas); "Abrir encaixe salvo" restaura tudo.
+- **Importação com revisão.** Mostra peças encontradas, material, espessura e avisos de cada arquivo; camadas `REBAIXO_x` e `FURO_x` viram rebaixo e furo cego.
 - **Detecção de duplicados** por SHA-256 do arquivo.
-- **Modelos e cores.** A cor identifica o modelo da peça. O modelo pode ser criado antes da importação e tem uma quantidade por projeto (ex.: 5 unidades do mesmo modelo).
-- **Regras de chapa.** Modelos em chapas separadas, modelos que devem ficar na mesma chapa e pares que não podem se misturar.
-- **Encaixe** com rotação livre ou em passos, espelhamento por peça e preenchimento de furos, calculado no servidor em vários núcleos ou no navegador.
+- **Encaixe** com rotação livre ou em passos, espelhamento por peça, preenchimento de furos e espaço/margem por peça, calculado no servidor em vários núcleos (Rust, com o Python de reserva) ou no navegador.
 - **Tempo de otimização à escolha**, de 10 segundos a 2 horas, com prévia do encaixe em tempo real, barra de progresso e botão para parar antes e ficar com o melhor até ali.
-- **Exportação** em EPS, DXF, DWG e SVG, mais relatório em PDF.
+- **Exportação** em EPS, DXF, DWG, SVG e G-code, mais relatório em PDF. Nome padrão `NN-<espessura>MM-<planejamento>`, com NN na ordem de corte do planejamento (ex.: `01-18MM-PLANEJAMENTO-LOTE1010.eps`).
+- **Acesso pela rede e túnel** com PIN (Presets › Acesso pela rede).
 - **EPS conferido.** O arquivo só é baixado se a releitura bater com o desenho (medida da chapa, número de contornos e desvio de até 0,01 mm).
 - **Histórico** de importações, alterações e exportações.
 - **Layout responsivo** para desktop, tablet e celular.
@@ -52,6 +53,22 @@ cargo build --release
 
 O servidor encontra o executável sozinho em `motor/target/release/` e avisa no início qual motor está em uso. Os dois motores dão exatamente as mesmas posições para a mesma ordem de peças; a diferença é quantas ordens cada um consegue testar no prazo.
 
+## Usinagem CNC (G-code)
+
+Aba **Usinagem CNC**, no modelo do Aspire e do Alphacam: biblioteca de ferramentas (diâmetro, nº T, rotação, avanço, mergulho, passo vertical, sobreposição), estratégia de corte e pós-processador. Gera o G-code das chapas encaixadas (`cam.py`, rota `/api/gcode`).
+
+- **Contorno** externo e interno com compensação do raio da fresa, passadas em profundidade, rampa de entrada e sentido concordante ou discordante. "Passar da chapa" desce na mesa de sacrifício.
+- **Micro-juntas** nas peças menores que a área escolhida (quantidade, largura e altura).
+- **Furação**: furo redondo com broca do mesmo diâmetro (±0,2 mm) vira furação, com bicada opcional; os outros furos viram contorno interno.
+- **Rebaixo e furo cego** pelas camadas do DXF: contorno na camada `REBAIXO_5` (ou `POCKET_5`) é rebaixo de 5 mm; `FURO_10` é furo de 10 mm. Esses contornos não contam como furo no encaixe.
+- **Mesa de vácuo**: furos, rebaixos e contornos internos antes; peças pequenas antes das grandes.
+- **Troca de ferramenta** manual (um arquivo por ferramenta) ou automática (`T M06`, um arquivo por chapa).
+- **Pós-processador** NCStudio editável (início, troca, spindle e fim do arquivo, com variáveis `{T}`, `{RPM}`, `{SAFEZ}`…).
+
+**Simulação 2D e 3D** (botão "Simular 2D / 3D", `sim.js`): lê o G-code gerado e remove material de uma chapa virtual, como a simulação do Alphacam. Escolha o material (MDF cru, MDF BP branco ou preto, compensado, acrílico, ACM ou cores próprias de face e miolo), a vista (2D de cima ou 3D com giro, deslocamento e zoom), a velocidade (tempo real até 500×) e a posição na linha do tempo. Mostra a ferramenta e a linha de G-code em execução e avisa movimento rápido (G0) dentro do material, que na máquina seria colisão. O 3D usa WebGL2 direto, sem bibliotecas.
+
+Origem X0 Y0 no canto inferior esquerdo da chapa; Z0 no topo da chapa ou na mesa. Confira sempre a simulação no controle da máquina antes do primeiro corte.
+
 ## Instalador para Windows
 
 `installer\build.ps1` gera `installer\out\EncaixeChapa-Setup-<versão>.exe`, que já leva a janela do programa (Electron), o Python portátil (python.org) e o motor Rust compilado. O programa abre na própria janela, sem console nem navegador: ela liga o servidor escondido e o desliga ao fechar (`desktop/main.js`). Quem instala não precisa de Python nem de Rust, nem de permissão de administrador: o programa vai para `%LOCALAPPDATA%\Programs\EncaixeChapa` e os dados para `%LOCALAPPDATA%\EncaixeChapa\data`, que a desinstalação não apaga.
@@ -66,18 +83,20 @@ Para gerar é preciso ter o Inno Setup 6 (`winget install JRSoftware.InnoSetup`)
 
 ## Como usar
 
-1. Crie um projeto em **Novo projeto**.
-2. Em **Modelos e cores**, crie os modelos (opcional, pode ser feito depois).
-3. Solte os arquivos em **Importar** e confira a tela de revisão.
-4. Ajuste quantidade, material, espessura e giro de cada peça.
-5. Defina a medida das chapas e clique em **Encaixar**.
-6. Exporte em **EPS**, DXF, DWG ou SVG, ou gere o relatório em PDF.
+1. Em **Produtos**, crie o produto e importe as peças dele; ajuste quantidade, giro, espelhamento, espaço e margem de cada peça.
+2. Em **Planejamento**, crie um planejamento, adicione os produtos, defina quantidades, ordem e cores, e clique em **Enviar para o encaixe**.
+3. Em **Encaixar**, confira a medida das chapas e a configuração, clique em **Encaixar** e depois em **Salvar encaixe** (fica no planejamento).
+4. Exporte em **EPS**, DXF, DWG ou SVG, gere o relatório em PDF, ou gere o G-code em **Usinagem CNC** (com simulação 2D/3D).
 
 ## Estrutura
 
 | Arquivo | Papel |
 |---|---|
-| `index.html` | Toda a interface (HTML, CSS e JavaScript) |
+| `index.html` | Interface (HTML e CSS) |
+| `app.js` | Lógica da página |
+| `sim.js` | Simulação de usinagem 2D/3D |
+| `cam.py` | Caminhos de ferramenta e G-code |
+| `desktop/`, `installer/` | Janela Electron e gerador do instalador |
 | `server.py` | Servidor local e rotas da API |
 | `nest.py` | Algoritmo de encaixe em Python (reserva) |
 | `motor/` | O mesmo algoritmo em Rust, compilado: dezenas de vezes mais rápido |
@@ -92,8 +111,12 @@ Para gerar é preciso ter o Inno Setup 6 (`winget install JRSoftware.InnoSetup`)
 
 Tudo fica na pasta `data/`, que **não vai para o repositório**:
 
-- `store.json`: projetos, modelos e cores, presets, regras, histórico e exportações.
-- `project_<id>.json`: peças, arquivos de origem e contadores de sequência de cada projeto.
+- `store.json`: índice de produtos e planejamentos, presets, configurações (inclusive usinagem) e a área de encaixe.
+- `product_<id>.json`: peças e arquivos de origem de cada produto.
+- `plan_<id>.json`: encaixe salvo do planejamento (peças, chapas, posições e definição usada).
+- `project_<id>.json`: área de encaixe (e projetos antigos, guardados).
+- `rede.json`: acesso pela rede (ligado/desligado e PIN).
+- `history.jsonl`, `exports.jsonl`: histórico e exportações.
 
 A gravação é atômica e mantém uma cópia `.bak`. Um arquivo corrompido é preservado ao lado, nunca apagado, e o `.bak` válido volta a ser o arquivo principal. Se os dois estiverem ruins, a página mostra erro em vez de abrir vazia.
 
@@ -135,7 +158,7 @@ Lê os projetos gravados em `data/` (sem alterar nada), roda o encaixe e mostra,
 - **O EPS ainda não foi testado em máquina de corte**, nem no CorelDRAW ou Ghostscript.
 - **Eixo Y do EPS.** A origem segue a tela (canto superior esquerdo). Confirme o que a sua máquina espera antes de cortar.
 - **Curvas viram retas.** Arcos e círculos são convertidos em polilinhas, e o EPS sai só com segmentos de reta.
-- **Entidades de DXF não lidas:** SPLINE, ELLIPSE, INSERT (blocos) e POLYLINE antiga. O programa avisa e pede confirmação antes de importar; no CAD, exploda os blocos e converta as curvas em polilinhas.
+- **Entidades de DXF não lidas:** INSERT (blocos) e POLYLINE antiga. O programa avisa e pede confirmação antes de importar; no CAD, exploda os blocos. SPLINE e ELLIPSE são lidas e convertidas em polilinha.
 - **Uma janela por vez.** Com duas abas abertas, a segunda recebe conflito e para de gravar.
 - **Modelos e cores são compartilhados** entre todos os projetos.
 - Peças idênticas dentro do mesmo arquivo viram quantidade; entre arquivos diferentes nunca se fundem.

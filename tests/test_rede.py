@@ -101,5 +101,61 @@ class RemoteTests(unittest.TestCase):
         self.assertEqual(self.login(server.net_config()["pin"])[0], 421)
 
 
+
+class TunnelTests(unittest.TestCase):
+    """cloudflared chega de 127.0.0.1 com Cf-Connecting-Ip: é internet, então vale o PIN."""
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        cls.port = cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        server.NET_ON = False
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def setUp(self):
+        server.NET_ON = True
+        server.SESSIONS.clear()
+        server.FAILS.clear()
+
+    def req(self, method, path, headers=None, body=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            h = {"Host": "abc-def.trycloudflare.com", "Cf-Connecting-Ip": "200.1.2.3"}
+            h.update(headers or {})
+            c.request(method, path, body=body, headers=h)
+            r = c.getresponse()
+            return r.status, r.headers, r.read()
+        finally:
+            c.close()
+
+    def test_tunnel_needs_pin_and_https_origin(self):
+        st, _, body = self.req("GET", "/")
+        self.assertIn(b'name="pin"', body)
+        self.assertEqual(self.req("GET", "/api/store")[0], 401)
+        self.assertEqual(self.req("GET", "/api/store", {"Host": "127.0.0.1:%d" % self.port})[0], 401)   # host local não fura
+        form = {"Content-Type": "application/x-www-form-urlencoded", "Origin": "https://abc-def.trycloudflare.com"}
+        st, h, _ = self.req("POST", "/api/login", form, ("pin=" + server.net_config()["pin"]).encode())
+        self.assertEqual(st, 303)
+        self.assertIn("Secure", h["Set-Cookie"])
+        cookie = h["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.req("GET", "/api/store", {"Cookie": cookie})[0], 200)
+        self.assertEqual(self.req("GET", "/api/rede", {"Cookie": cookie})[0], 403)
+        bad = dict(form, Origin="https://evil.example")
+        self.assertEqual(self.req("POST", "/api/login", bad, b"pin=1")[0], 403)
+
+    def test_tunnel_closed_when_network_off(self):
+        server.NET_ON = False
+        self.assertEqual(self.req("GET", "/")[0], 421)
+        self.assertEqual(self.req("GET", "/", {"Host": "127.0.0.1:%d" % self.port})[0], 403)
+
+    def test_other_domains_rejected(self):
+        self.assertEqual(self.req("GET", "/", {"Host": "evil.example"})[0], 421)
+        self.assertEqual(self.req("GET", "/", {"Host": "x.trycloudflare.com.evil.example"})[0], 421)
+
+
 if __name__ == "__main__":
     unittest.main()

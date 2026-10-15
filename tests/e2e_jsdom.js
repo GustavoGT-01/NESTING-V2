@@ -35,12 +35,9 @@ const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
   const srv=await startServer();
   try{
     let w=await boot(),$=s=>w.document.querySelector(s);
-    ok(!!$('#proj')&&/salvo|servidor/.test($('#saved').textContent),'página carrega e conecta ao servidor: '+$('#saved').textContent);
-    // importar sem projeto -> bloqueia
-    $('#file').dispatchEvent(Object.assign(new w.Event('change'),{}));
-    // criar projeto
-    $('#projNew').click();$('#pjCode').value='POLTRONA-A';$('#pjProd').value='Poltrona modelo A';$('#pjLot').value='L123';$('#pjOk').click();await sleep(600);
-    ok($('#proj').options.length===1,'projeto criado');
+    ok(!!$('#prodboard')&&/salvo|servidor/.test($('#saved').textContent),'página carrega e conecta ao servidor: '+$('#saved').textContent);
+    // sem tela de projetos: a área de encaixe interna já vem aberta
+    ok(w.eval('S').projectId==='mesa','área de encaixe aberta');
     // importar 2 arquivos (15 mm e 18 mm do mesmo modelo) + duplicado
     const mk=(n,c)=>new w.File([c],n,{type:'text/plain'});
     const f15=mk('Bacio_15mm.dxf',dxf([rect(0,0,300,200),circ(150,100,30)])),f18=mk('Bacio_18mm.dxf',dxf([rect(0,0,300,200),circ(150,100,35)])),dup=mk('Copia.dxf',dxf([rect(0,0,300,200),circ(150,100,30)]));
@@ -71,12 +68,12 @@ const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
     console.log('DBG disabled',$('#xeps').disabled,'tab',w.eval('S').tab,'snap',!!w.eval('S').snap,'nmsg',$('#nmsg').textContent);
     $('#xeps').click();await sleep(1500);
     console.log('DBG toast',$('#toast').textContent);console.log(askText.split('\n').slice(0,6).join(' | '));
-    ok((w.__dl||[]).some(n=>/POLTRONA-A_.*MM_001\.eps$/.test(n)),'EPS baixado com nome padronizado: '+JSON.stringify(w.__dl));
+    ok((w.__dl||[]).some(n=>/^01-1[58]MM-ENCAIXE\.eps$/.test(n)),'EPS com nome padrão chapa-espessura-planejamento: '+JSON.stringify(w.__dl));
     const blob=w.__blobs[w.__blobs.length-1],blobText=await new Promise(r=>{const fr=new w.FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r('');fr.readAsText(blob)});// o Blob do jsdom não tem .text()
     ok(/^%!PS-Adobe-3.0 EPSF-3.0/.test(blobText||''),'conteúdo EPS válido');
     ok(/pendentes de classificação/.test(askText),'aviso de peças sem modelo na revisão antes de exportar');
     $('#xeps').click();await sleep(1500);
-    ok((w.__dl||[]).some(n=>/_002\.eps$/.test(n)),'segunda exportação não repete o nome (sequência 002)');
+    ok(new Set(w.__dl).size===w.__dl.length/2,'exportar de novo gera os mesmos nomes (a ordem de corte não muda)');
     await w.flush();await sleep(300);
     await w.flush?.();w.close();
     // reinício: nova página, mesmo servidor/dados
@@ -87,12 +84,12 @@ const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
     ok(!st.history&&!st.exports,'store.json não carrega mais histórico nem exportações');
     const hist=fs.readFileSync(path.join(data,'history.jsonl'),'utf8').trim().split(/\n/).map(JSON.parse);
     const kinds=hist.map(h=>h.kind);
-    ok(['project.create','import','export'].every(k=>kinds.includes(k)),'histórico: '+kinds.join(', '));
+    ok(['import','export'].every(k=>kinds.includes(k)),'histórico: '+kinds.join(', '));
     const ex=fs.readFileSync(path.join(data,'exports.jsonl'),'utf8').trim().split(/\n/).map(JSON.parse)[0].detail;
-    ok(ex.files[0].ok&&ex.files[0].sources.length>0&&ex.project.code==='POLTRONA-A','exportação registrada com origem, projeto e validação');
-    // outro projeto fica separado
-    $('#projNew').click();$('#pjCode').value='CADEIRA-B';$('#pjProd').value='Cadeira B';$('#pjOk').click();await sleep(800);
-    ok(w.eval('S').parts.length===0&&w.eval('S').projectId!==st.projects[0].id,'novo projeto começa vazio (sem mistura)');
+    ok(ex.files[0].ok&&ex.files[0].sources.length>0&&ex.project.code==='MESA','exportação registrada com origem, projeto e validação');
+    // produto novo: base separada da área de encaixe
+    await w.eval('newProduct')();await sleep(600);
+    ok(w.eval('PR').id&&w.eval('PR').doc.parts.length===0&&w.eval('S').parts.length===3,'novo produto começa vazio e não mexe no encaixe');
     await w.flush?.();w.close();
   }finally{killTree(srv)}
 })().catch(e=>{console.log('FAIL erro: '+(e&&e.stack||e));process.exitCode=1});

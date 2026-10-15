@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import ipaddress
 import json
+import re
 import logging
 import multiprocessing
 import os
@@ -22,6 +23,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
+import cam
 import engine
 import eps
 import store
@@ -122,6 +124,12 @@ def session_ok(cookie_header: str | None) -> bool:
                 exp = SESSIONS.get(value)
             return exp is not None and exp > time.time()
     return False
+
+
+# Túnel da Cloudflare (cloudflared): chega de 127.0.0.1, mas é internet. O cabeçalho Cf-Connecting-Ip
+# marca o pedido como remoto (PIN obrigatório); só domínios *.trycloudflare.com, que não apontam para cá.
+DOC = re.compile(r"^/api/(project|product|plan)/([^/]+)(/delete)?$")   # arquivo de projeto ou de produto
+TUNNEL_HOST = re.compile(r"^[a-z0-9-]+\.trycloudflare\.com$")
 
 
 def ip_host(host: str, port: int) -> bool:
@@ -242,10 +250,20 @@ class Handler(SimpleHTTPRequestHandler):
         host = self.headers.get("Host")
         if host is None or host in self._local() or (NET_ON and ip_host(host, self.server.server_address[1])):
             return True
+        if NET_ON and self._tunnel() and TUNNEL_HOST.match(host):
+            return True
         self._fail(421, "Host não aceito.")
         return False
 
+    def _tunnel(self) -> bool:
+        return bool(self.headers.get("Cf-Connecting-Ip"))
+
+    def _client_ip(self) -> str:
+        return (self.headers.get("Cf-Connecting-Ip") or "").strip()[:64] if self._tunnel() else self.client_address[0]
+
     def _remote(self) -> bool:
+        if self._tunnel():
+            return True
         try:
             return not ipaddress.ip_address(self.client_address[0]).is_loopback
         except ValueError:
@@ -280,7 +298,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.path = "/index.html"
             return True
-        if path == "/app.js":  # o script da página; nada mais sai da pasta
+        if path in ("/app.js", "/sim.js"):  # os scripts da página; nada mais sai da pasta
             return True
         self.send_error(404)
         return False
@@ -315,9 +333,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(store.load())
             except ValueError as exc:  # dados corrompidos sem cópia: avisa em vez de mostrar vazio
                 return self._fail(500, str(exc))
-        elif path.startswith("/api/project/"):
+        elif DOC.match(path) and not DOC.match(path).group(3):
+            kind, pid = DOC.match(path).group(1, 2)
             try:
-                return self._json(store.load_project(path.rsplit("/", 1)[1]))
+                return self._json(store.load_project(pid, kind))
             except store.BadId as exc:
                 return self._fail(400, str(exc))
             except ValueError as exc:
@@ -372,6 +391,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
         origin = self.headers.get("Origin")
         allowed = {"http://" + h for h in self._local()} | {"http://" + (self.headers.get("Host") or "")}
+        if NET_ON and self._tunnel() and origin and TUNNEL_HOST.match(origin.partition("https://")[2]):
+            allowed.add(origin)
         if origin is not None and origin not in allowed:
             return self._fail(403, "Origem não aceita.")  # outro site postando no servidor
         path = self.path.split("?", 1)[0]
@@ -379,12 +400,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not (self._remote() and NET_ON):
                 return self._fail(403, "Acesso pela rede desligado.")
             pin = (parse_qs(data.decode("utf-8", "replace")).get("pin") or [""])[0].strip()
-            token = check_pin(self.client_address[0], pin)
+            token = check_pin(self._client_ip(), pin)
             if token is None:
                 return self._login_page("PIN errado. Depois de 5 erros, espere 5 minutos.")
             self.send_response(303)
             self.send_header("Location", "/")
-            self.send_header("Set-Cookie", "%s=%s; Path=/; HttpOnly; SameSite=Strict; Max-Age=%d" % (COOKIE, token, SESSION_DAYS * 86400))
+            secure = "; Secure" if self._tunnel() else ""   # o túnel é https
+            self.send_header("Set-Cookie", "%s=%s; Path=/; HttpOnly; SameSite=Strict; Max-Age=%d%s" % (COOKIE, token, SESSION_DAYS * 86400, secure))
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -440,15 +462,15 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self._fail(400, "Falha ao gravar: %s" % exc)
             return
-        elif path.startswith("/api/project/") and path.endswith("/delete"):
+        elif DOC.match(path) and DOC.match(path).group(3):
             try:
-                self._json({"ok": True, "file": store.delete_project(path.split("/")[3])})
+                self._json({"ok": True, "file": store.delete_project(DOC.match(path).group(2), DOC.match(path).group(1))})
             except Exception as exc:
                 self._fail(400, "Falha ao excluir o projeto: %s" % exc)
             return
-        elif path.startswith("/api/project/"):
+        elif DOC.match(path):
             try:
-                rev = store.save_project(path.rsplit("/", 1)[1], json.loads(data.decode("utf-8")))
+                rev = store.save_project(DOC.match(path).group(2), json.loads(data.decode("utf-8")), DOC.match(path).group(1))
                 self._json(dict(ok=True, rev=rev) if isinstance(rev, int) else {"ok": True})
             except store.Conflict as exc:
                 self._fail(409, str(exc))
@@ -474,6 +496,22 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"files": files})
             except Exception as exc:
                 self._fail(400, "Falha ao gerar o EPS: %s" % exc)
+            return
+        elif path == "/api/gcode":
+            try:
+                body = json.loads(data.decode("utf-8"))
+                out = []
+                for item in body["sheets"][:500]:
+                    r = cam.gcode_sheet(item, body["cam"])
+                    stem = str(item.get("name") or "chapa")[:120]
+                    for f in r["files"]:
+                        f["name"] = "%s%s.%s" % (stem, f.pop("suffix"), r["ext"])
+                    out.append({"name": stem, "files": r["files"], "warnings": r["warnings"], "stats": r["stats"], "preview": r["preview"]})
+                self._json({"sheets": out})
+            except cam.CamError as exc:
+                self._fail(400, str(exc))
+            except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                self._fail(400, "Pedido de usinagem inválido: %s" % exc)
             return
         elif path == "/api/dxf-dwg":
             try:

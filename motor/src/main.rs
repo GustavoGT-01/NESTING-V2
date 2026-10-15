@@ -448,18 +448,19 @@ impl Sheet {
     }
 
     /// Melhor (gx, gy) mais à esquerda; cap limita gx para podar.
-    fn find(&mut self, m: &Mask, cap: i64, last: Option<(usize, usize)>, forb: &mut Vec<u64>) -> Option<(usize, usize)> {
-        let maxx = (self.w as i64 - m.w as i64).min(cap - 1);
-        if maxx < 0 || self.h < m.h {
+    fn find(&mut self, m: &Mask, cap: i64, last: Option<(usize, usize)>, forb: &mut Vec<u64>, e: usize) -> Option<(usize, usize)> {
+        let maxx = (self.w as i64 - m.w as i64 - e as i64).min(cap - 1);
+        if maxx < e as i64 || self.h < m.h + 2 * e {
             return None;
         }
         let maxx = maxx as usize;
-        let mut lo = 0usize;
+        let ymax = self.h - m.h - e;
+        let mut lo = e;
         if let Some((gx0, gy0)) = last {
             if gx0 > maxx {
                 return None;
             }
-            for gy in gy0..=self.h - m.h {
+            for gy in gy0.max(e)..=ymax {
                 if self.fits(m, gx0, gy) {
                     return Some((gx0, gy));
                 }
@@ -472,7 +473,7 @@ impl Sheet {
         let mut best: Option<(usize, usize)> = None;
         forb.clear();
         forb.resize(self.nw + 1, 0);
-        for gy in 0..=self.h - m.h {
+        for gy in e..=ymax {
             let limit = match best {
                 Some(b) => b.0,
                 None => maxx + 1,
@@ -600,6 +601,23 @@ struct Item {
     mirror: bool,
     gid: usize,
     angs: Vec<f64>,
+    /// Espaço entre peças e margem da chapa desta peça (mm); sem valor próprio, os do encaixe.
+    gap: f64,
+    mar: f64,
+    /// Produto da peça (0 = sem produto) e posição dele na ordem do planejamento.
+    prod: usize,
+    rank: i64,
+}
+
+/// Folga por peça. O encaixe roda com o menor espaço (r0, rb0); a peça com espaço maior
+/// ganha células nas duas máscaras, e duas peças ficam sempre a pelo menos o maior dos
+/// dois espaços: rb_a + r_b >= max(T_a, T_b). A margem própria vira recuo e da borda.
+fn item_cells(it: &Item, opt: &Opt) -> (usize, usize, usize) {
+    let t = (it.gap / opt.cs - 1e-9).ceil().max(0.0) as usize;
+    let r = opt.r.max(t.saturating_sub(opt.rb));
+    let rb = opt.rb.max(t.saturating_sub(opt.r));
+    let e = ((it.mar - opt.mar) / opt.cs - 1e-9).ceil().max(0.0) as usize;
+    (r, rb, e)
 }
 
 #[derive(Clone, Copy)]
@@ -626,6 +644,10 @@ struct Opt<'a> {
     rb: usize,
     boxed: bool,
     rules: &'a Rules,
+    /// Planejamento: encaixar os produtos na ordem da lista (rank) e manter cada produto
+    /// na mesma chapa ou em chapas vizinhas (near).
+    seq: bool,
+    near: bool,
 }
 
 #[derive(Default)]
@@ -662,7 +684,7 @@ struct Cand {
 }
 
 fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &Opt, cache: &mut Cache) -> Res {
-    let (cs, r) = (opt.cs, opt.r);
+    let cs = opt.cs;
     let wf = ((g.0 - 2.0 * opt.mar) / cs).floor();
     let hf = ((g.1 - 2.0 * opt.mar) / cs).floor();
     let mut fail: Vec<usize> = Vec::new();
@@ -672,19 +694,48 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
     }
     let (w, h) = (wf as usize, hf as usize);
     let rules = opt.rules;
+    // ordem do planejamento: a busca troca peças à vontade, mas os produtos entram na sequência da lista
+    let sorted: Vec<Ent>;
+    let order: &[Ent] = if opt.seq {
+        let mut v = order.to_vec();
+        v.sort_by_key(|e| items[e.uid].rank);
+        sorted = v;
+        &sorted
+    } else {
+        order
+    };
+    let mut span: HashMap<usize, (usize, usize)> = HashMap::new();
     let mut sheets: Vec<Sheet> = Vec::new();
     let mut opened: HashMap<usize, usize> = HashMap::new();
     let mut forb: Vec<u64> = Vec::new();
     let mut cands: Vec<Cand> = Vec::new();
     for e in order {
         let it = &items[e.uid];
+        let (r, rb, edge) = item_cells(it, opt);
         let gid = it.gid;
         let angs: &[f64] = if e.fine { &fine[e.uid] } else { &it.angs };
         let gene = e.gene as usize;
         let tog = rules.together.contains(&gid);
         let mut placed = false;
         let n0 = sheets.len();
-        for si in 0..=n0 {
+        // produto junto: primeiro as chapas onde ele já está, depois as vizinhas; o resto só se não couber
+        let mut tries: Vec<usize> = Vec::with_capacity(n0 + 1);
+        if let (true, Some(&(lo, hi))) = (opt.near && it.prod != 0, span.get(&it.prod)) {
+            tries.extend(lo..=hi);
+            tries.push(hi + 1);
+            if lo > 0 {
+                tries.push(lo - 1);
+            }
+            tries.retain(|&k| k <= n0);
+            for k in 0..=n0 {
+                if !tries.contains(&k) {
+                    tries.push(k);
+                }
+            }
+        } else {
+            tries.extend(0..=n0);
+        }
+        for si in tries {
             if si == sheets.len() {
                 if tog && opened.contains_key(&gid) {
                     fail.push(e.uid);
@@ -720,13 +771,13 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
                         None => {
                             let (rings, mw, mh) = transform(&it.rings, a, mi);
                             cache.masks.push(build_mask(&rings, mw, mh, cs, r));
-                            cache.big.push(if opt.rb != r { Some(build_mask(&rings, mw, mh, cs, opt.rb)) } else { None });
+                            cache.big.push(if rb != r { Some(build_mask(&rings, mw, mh, cs, rb)) } else { None });
                             cache.map.insert(key, cache.masks.len() - 1);
                             cache.masks.len() - 1
                         }
                     };
                     let m = &cache.masks[mid];
-                    if m.w > w || m.h > h {
+                    if m.w + 2 * edge > w || m.h + 2 * edge > h {
                         continue;
                     }
                     if sh.memo.len() <= mid {
@@ -742,7 +793,7 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
                         continue;
                     }
                     let cap: i64 = if opt.boxed || cands.len() <= gene { w as i64 } else { cands[gene].key[0] as i64 - m.w as i64 + 1 };
-                    let sp = match sh.find(m, cap, last, &mut forb) {
+                    let sp = match sh.find(m, cap, last, &mut forb, edge) {
                         Some(sp) => sp,
                         None => {
                             if cap >= w as i64 {
@@ -765,10 +816,14 @@ fn pack(order: &[Ent], items: &[Item], fine: &[Vec<f64>], g: (f64, f64), opt: &O
             if !cands.is_empty() {
                 let c = &cands[gene.min(cands.len() - 1)];
                 let m = &cache.masks[c.mask];
-                sh.put(m, cache.big[c.mask].as_ref().unwrap_or(m), opt.rb - r, c.sp.0, c.sp.1);
+                sh.put(m, cache.big[c.mask].as_ref().unwrap_or(m), rb - r, c.sp.0, c.sp.1);
                 sh.gids.insert(gid);
                 if tog && !opened.contains_key(&gid) {
                     opened.insert(gid, si);
+                }
+                if it.prod != 0 {
+                    let s = span.entry(it.prod).or_insert((si, si));
+                    *s = (s.0.min(si), s.1.max(si));
                 }
                 sh.placed.push(Placed {
                     uid: e.uid,
@@ -978,6 +1033,8 @@ struct Base<'a> {
     mar: f64,
     cs: f64,
     rules: &'a Rules,
+    seq: bool,
+    near: bool,
 }
 
 /// Etapa 1 (grossa): grade de 4 mm, muitos ângulos, acha ordem e giro.
@@ -991,7 +1048,7 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
     let cs1 = if free_any { cs.max(4.0) } else { cs };
     let none: Vec<Vec<f64>> = vec![Vec::new(); items.len()];
     let (r1, rb1) = radii(gap, cs1);
-    let o1 = Opt { cs: cs1, mar, r: r1, rb: rb1, boxed, rules: base.rules };
+    let o1 = Opt { cs: cs1, mar, r: r1, rb: rb1, boxed, rules: base.rules, seq: base.seq, near: base.near };
     let (b1, it1) = search(items, &none, g, &o1, t1, &mut rnd, None, &mut Cache::default(), shared);
     // etapa 2: refina ângulos ao redor do escolhido por peça
     let mut chosen: Vec<Option<f64>> = vec![None; items.len()];
@@ -1016,7 +1073,7 @@ fn nest_group(g: (f64, f64), items: &[Item], base: &Base, seconds: f64, seed: u6
         .collect();
     let order: Vec<Ent> = b1.order.iter().map(|e| Ent { uid: e.uid, gene: e.gene, fine: true }).collect();
     let (r2, rb2) = radii(gap, cs);
-    let o2 = Opt { cs, mar, r: r2, rb: rb2, boxed, rules: base.rules };
+    let o2 = Opt { cs, mar, r: r2, rb: rb2, boxed, rules: base.rules, seq: base.seq, near: base.near };
     let mut cache2 = Cache::default();
     let tp0 = Instant::now();
     let r1 = pack(&order, items, &fine, g, &o2, &mut cache2);
@@ -1071,8 +1128,9 @@ impl Names {
     }
 }
 
-fn read_group(key: &str, v: &J, rot: i64, gids: &mut Names) -> Group {
+fn read_group(key: &str, v: &J, rot: i64, gids: &mut Names, gap: f64, mar: f64) -> Group {
     let mut tids: HashMap<String, usize> = HashMap::new();
+    let mut prods: HashMap<String, usize> = HashMap::new();
     let mut angs: HashMap<(usize, String), Vec<f64>> = HashMap::new();
     let mut items = Vec::new();
     let mut ids = Vec::new();
@@ -1091,6 +1149,16 @@ fn read_group(key: &str, v: &J, rot: i64, gids: &mut Names) -> Group {
             mirror: it.get("mirror").map_or(false, J::truthy),
             gid: gids.id(&gid),
             angs: a,
+            gap: it.get("gap").and_then(J::num).filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(gap),
+            mar: it.get("mar").and_then(J::num).filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(mar),
+            prod: match it.get("prod").map(J::text).filter(|t| !t.is_empty()) {
+                Some(t) => {
+                    let n = prods.len() + 1;
+                    *prods.entry(t).or_insert(n)
+                }
+                None => 0,
+            },
+            rank: it.get("rank").and_then(J::num).unwrap_or(0.0) as i64,
         });
         ids.push(id);
     }
@@ -1152,6 +1220,7 @@ fn run(text: &str) -> Result<String, String> {
     let num = |k: &str, d: f64| p.get(k).and_then(J::num).unwrap_or(d);
     let (gap, mar, cs) = (num("gap", 4.0), num("mar", 5.0), num("cs", 2.0));
     let rot = num("rot", 90.0) as i64;
+    let (seq, near) = (p.get("seq").map_or(false, J::truthy), p.get("near").map_or(false, J::truthy));
     let total = num("seconds", 20.0);
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
     let want = num("workers", 0.0) as usize;
@@ -1161,15 +1230,17 @@ fn run(text: &str) -> Result<String, String> {
     }
     let mut gids = Names(vec![String::new()]);
     let rules = read_rules(&p, &mut gids);
-    let groups: Vec<Group> = p.get("groups").map_or(&[][..], J::entries).iter().map(|(k, v)| read_group(k, v, rot, &mut gids)).collect();
-    let base = Base { gap, mar, cs, rules: &rules };
+    let groups: Vec<Group> = p.get("groups").map_or(&[][..], J::entries).iter().map(|(k, v)| read_group(k, v, rot, &mut gids, gap, mar)).collect();
+    // grade e folga base de cada grupo: os menores valores entre o encaixe e as peças com valor próprio
+    let low = |g: &Group| (g.items.iter().map(|i| i.gap).fold(gap, f64::min), g.items.iter().map(|i| i.mar).fold(mar, f64::min));
 
     // modo de conferência: encaixa uma ordem dada, sem busca (compara com o nest.py)
     if let Some(order) = p.get("order") {
         let g = groups.first().ok_or("sem grupo")?;
+        let (gap, mar) = low(g);
         let ord: Vec<Ent> = order.arr().iter().map(|e| Ent { uid: e.arr()[0].num().unwrap_or(0.0) as usize, gene: e.arr()[1].num().unwrap_or(0.0) as u8, fine: false }).collect();
         let (r, rb) = radii(gap, cs);
-        let opt = Opt { cs, mar, r, rb, boxed: p.get("crit").map_or(false, |c| c.text() == "box"), rules: &rules };
+        let opt = Opt { cs, mar, r, rb, boxed: p.get("crit").map_or(false, |c| c.text() == "box"), rules: &rules, seq, near };
         let res = pack(&ord, &g.items, &vec![Vec::new(); g.items.len()], (g.w, g.h), &opt, &mut Cache::default());
         let sheets: Vec<String> = res
             .sheets
@@ -1199,6 +1270,8 @@ fn run(text: &str) -> Result<String, String> {
         // depois de uma parada, os grupos que faltam recebem só o mínimo: uma passada
         let secs = if stopped() { 0.0 } else { (total * wgt / wsum).max(1.0) };
         let dims = (g.w, g.h);
+        let (gap, mar) = low(g);
+        let base = Base { gap, mar, cs, rules: &rules, seq, near };
         let shared = Shared::new(&g.key, &g.ids, mar, emit);
         // metade dos núcleos com cada critério de posição; fica a melhor solução de todos
         let iters: u64 = if workers < 2 {

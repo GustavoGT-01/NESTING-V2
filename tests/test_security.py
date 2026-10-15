@@ -47,7 +47,7 @@ class SecurityTests(unittest.TestCase):
         return self.req("POST", path, h, body, **kw)[0]
 
     def test_page_is_served(self):
-        for p in ("/", "/index.html", "/app.js"):
+        for p in ("/", "/index.html", "/app.js", "/sim.js"):
             self.assertEqual(self.req("GET", p)[0], 200, p)
         self.assertEqual(self.req("GET", "/app.js/../server.py")[0], 404)
 

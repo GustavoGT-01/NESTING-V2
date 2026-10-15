@@ -25,7 +25,7 @@ ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 HISTORY_MAX = 5000
 EXPORTS_MAX = 2000
 DETAIL_MAX = 20000  # caracteres do detalhe serializado de um registro
-EDITABLE = ("projects", "models", "presets", "settings")
+EDITABLE = ("projects", "products", "plans", "models", "presets", "settings")
 DEFAULT_SETTINGS = {"naming": "{projeto}_{material}_{espessura}MM_{seq}"}
 
 
@@ -49,7 +49,7 @@ def now() -> str:
 
 def empty() -> dict:
     return {
-        "version": 1, "rev": 0, "projects": [], "models": [], "presets": [],
+        "version": 1, "rev": 0, "projects": [], "products": [], "plans": [], "models": [], "presets": [],
         "settings": dict(DEFAULT_SETTINGS),
     }
 
@@ -222,10 +222,20 @@ def read_history(offset: int = 0, limit: int = 50, bucket: str = "history") -> d
     return {"total": len(lines), "offset": offset, "limit": limit, "items": items}
 
 
-def load_project(pid: str) -> dict:
+# Projetos (área de encaixe) e produtos (base de produtos) têm o mesmo formato de arquivo: <tipo>_<id>.json
+KINDS = ("project", "product", "plan")
+
+
+def _doc_path(kind: str, pid: str) -> Path:
+    if kind not in KINDS:
+        raise BadId("Tipo de arquivo inválido.")
+    return data_dir() / ("%s_%s.json" % (kind, pid))
+
+
+def load_project(pid: str, kind: str = "project") -> dict:
     check_id(pid)
     with LOCK:
-        doc = _read_safe(data_dir() / ("project_%s.json" % pid))
+        doc = _read_safe(_doc_path(kind, pid))
         if doc is not None and not isinstance(doc, dict):
             raise ValueError("O arquivo do projeto não é um objeto JSON.")
         doc = doc or {"parts": [], "files": [], "uid": 0, "seq": {}, "groups": {}}
@@ -233,12 +243,12 @@ def load_project(pid: str) -> dict:
         return doc
 
 
-def delete_project(pid: str) -> str:
+def delete_project(pid: str, kind: str = "project") -> str:
     """Tira o projeto de uso sem apagar: o arquivo vira project_<id>.json.excluido-<hora>, que nada lê
     nem serve, e pode ser renomeado de volta para recuperar. Devolve o nome novo ('' se não havia arquivo)."""
     check_id(pid)
     with LOCK:
-        path = data_dir() / ("project_%s.json" % pid)
+        path = _doc_path(kind, pid)
         if not path.exists():
             return ""
         dest = path.with_name("%s.excluido-%d" % (path.name, int(time.time())))
@@ -246,7 +256,7 @@ def delete_project(pid: str) -> str:
         return dest.name
 
 
-def save_project(pid: str, payload: dict) -> int:
+def save_project(pid: str, payload: dict, kind: str = "project") -> int:
     """Grava o projeto e devolve a nova revisão. Sem "rev" no payload, grava sem conferir (compatível)."""
     check_id(pid)
     if not isinstance(payload, dict):
@@ -255,7 +265,7 @@ def save_project(pid: str, payload: dict) -> int:
         if key in payload and not isinstance(payload[key], list):
             raise ValueError("Campo '%s' do projeto inválido: esperado lista." % key)
     with LOCK:
-        path = data_dir() / ("project_%s.json" % pid)
+        path = _doc_path(kind, pid)
         current = (_read_safe(path) or {}).get("rev", 0)
         sent = payload.get("rev")
         if isinstance(sent, int) and not isinstance(sent, bool) and sent != current:

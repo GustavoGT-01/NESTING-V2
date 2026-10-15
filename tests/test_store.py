@@ -156,6 +156,18 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(store.BadId):
             store.delete_project("../x")
 
+    def test_product_files_apart_from_projects(self):
+        rev = store.save_project("x1", {"name": "Mesa", "parts": [{"id": 1}]}, "product")
+        self.assertEqual(rev, 1)
+        self.assertTrue((self.d / "product_x1.json").exists())
+        self.assertFalse((self.d / "project_x1.json").exists())
+        self.assertEqual(store.load_project("x1", "product")["name"], "Mesa")
+        self.assertEqual(store.load_project("x1")["parts"], [])            # projeto de mesmo id: outro arquivo
+        self.assertTrue(store.delete_project("x1", "product").startswith("product_x1.json.excluido-"))
+        with self.assertRaises(store.BadId):
+            store.load_project("x1", "../store")
+        self.assertIn("products", store.load())
+
     def test_snapshot_daily_and_prunes(self):
         store.save({"models": [{"id": "m"}]}, 0)
         store.log("import", {"n": 1})
