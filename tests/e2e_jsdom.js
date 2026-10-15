@@ -65,14 +65,14 @@ const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
     ok(!!w.eval('S').res,'encaixe concluído');
     // exportar EPS da aba atual
     const origAsk=w.ask;let askText='';w.ask=async t=>{askText=t;return true};
-    console.log('DBG disabled',$('#xeps').disabled,'tab',w.eval('S').tab,'snap',!!w.eval('S').snap,'nmsg',$('#nmsg').textContent);
-    $('#xeps').click();await sleep(1500);
+    console.log('DBG disabled',$('[data-x=eps][data-xm=each]').disabled,'tab',w.eval('S').tab,'snap',!!w.eval('S').snap,'nmsg',$('#nmsg').textContent);
+    $('[data-x=eps][data-xm=each]').click();await sleep(1500);
     console.log('DBG toast',$('#toast').textContent);console.log(askText.split('\n').slice(0,6).join(' | '));
     ok((w.__dl||[]).some(n=>/^01-1[58]MM-ENCAIXE\.eps$/.test(n)),'EPS com nome padrão chapa-espessura-planejamento: '+JSON.stringify(w.__dl));
     const blob=w.__blobs[w.__blobs.length-1],blobText=await new Promise(r=>{const fr=new w.FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r('');fr.readAsText(blob)});// o Blob do jsdom não tem .text()
     ok(/^%!PS-Adobe-3.0 EPSF-3.0/.test(blobText||''),'conteúdo EPS válido');
     ok(/pendentes de classificação/.test(askText),'aviso de peças sem modelo na revisão antes de exportar');
-    $('#xeps').click();await sleep(1500);
+    $('[data-x=eps][data-xm=each]').click();await sleep(1500);
     ok(new Set(w.__dl).size===w.__dl.length/2,'exportar de novo gera os mesmos nomes (a ordem de corte não muda)');
     await w.flush();await sleep(300);
     await w.flush?.();w.close();

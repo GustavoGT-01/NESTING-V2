@@ -201,6 +201,7 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .plan-ord{display:flex;flex-direction:column;gap:2px;align-items:center}.plan-ord button{width:26px;height:20px;padding:0;font-size:11px;line-height:1}.plan-ord b{font-size:11px;color:var(--mu);font-weight:600}
 .plan-opts{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:var(--r2);background:var(--bg2);font-size:13px}
 .plan-row input[type=color]{width:44px;height:36px;padding:3px;cursor:pointer}
+.xfmt{display:grid;grid-template-columns:44px 1fr 1fr;gap:8px;align-items:center}.xfmt b{font-size:14px}
 .plan-def{color:var(--mu);font-size:12px;line-height:1.5}
 .plan-saved{display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--ok) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ok) 35%,var(--ln));border-radius:var(--r2);padding:10px 12px;font-size:13px}
 .plan-row input{text-align:center}
@@ -484,21 +485,19 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
       <label class="f">Trabalho<input id="job" autocomplete="off" maxlength="120" placeholder="Nome do trabalho"></label>
       <input type="hidden" id="namePat" value="{projeto}_{material}_{espessura}MM_{seq}">
       <div class="x-prev">Nome dos arquivos (padrão): <b id="patPrev"></b></div>
-      <div class="msg">Sempre projeto_material_espessuraMM_sequência. A sequência continua por projeto, material e espessura.</div>
+      <div class="msg">Sempre NN-espessuraMM-planejamento. NN é a ordem de corte do planejamento. "Todas em um arquivo" sai como TODAS-espessuraMM-planejamento.</div>
     </div>
     <div class="xcard">
-      <div class="xcard-hd"><b>Arquivos de corte · EPS</b><span>conferidos contra o desenho</span></div>
-      <div class="row"><label class="f chk"><input type="checkbox" id="epsColors"> Cores dos modelos</label><label class="f chk"><input type="checkbox" id="epsFrame"> Contorno da chapa</label></div>
-      <div class="btns"><button type="button" class="pri" id="xeps" disabled>EPS desta aba</button><button type="button" id="xepsall" disabled>EPS de todas</button></div>
-    </div>
-    <div class="xcard">
-      <div class="xcard-hd"><b>Outros formatos</b></div>
-      <div class="fmt-grid">
-        <button type="button" id="xsvg" disabled><b>SVG</b><span>esta aba · visualizar</span></button>
-        <button type="button" id="xdxf" disabled><b>DXF</b><span>esta aba · CAD</span></button>
-        <button type="button" id="xdwg" disabled><b>DWG</b><span>esta aba · via ODA</span></button>
-        <button type="button" id="xall" disabled><b>DXF</b><span>todas as abas</span></button>
+      <div class="xcard-hd"><b>Arquivos de corte</b><span>EPS conferido contra o desenho</span></div>
+      <label class="f chk"><input type="checkbox" id="xScope"> Todas as espessuras (todas as abas do encaixe)</label>
+      <div class="row"><label class="f chk"><input type="checkbox" id="epsColors"> EPS com cores</label><label class="f chk"><input type="checkbox" id="epsFrame"> EPS com contorno da chapa</label></div>
+      <div class="xfmt">
+        <b>EPS</b><button type="button" class="pri" data-x="eps" data-xm="each" disabled>Chapa por chapa</button><button type="button" data-x="eps" data-xm="one" disabled>Todas em um arquivo</button>
+        <b>DXF</b><button type="button" data-x="dxf" data-xm="each" disabled>Chapa por chapa</button><button type="button" data-x="dxf" data-xm="one" disabled>Todas em um arquivo</button>
+        <b>DWG</b><button type="button" data-x="dwg" data-xm="each" disabled>Chapa por chapa</button><button type="button" data-x="dwg" data-xm="one" disabled>Todas em um arquivo</button>
+        <b>SVG</b><button type="button" data-x="svg" data-xm="each" disabled>Chapa por chapa</button><button type="button" data-x="svg" data-xm="one" disabled>Todas em um arquivo</button>
       </div>
+      <div class="msg">Em "todas em um arquivo" as chapas ficam uma acima da outra, com 200 mm entre elas.</div>
     </div>
     <div class="xcard">
       <div class="xcard-hd"><b>Relatório</b><span>PDF com chapas e lista de peças</span></div>

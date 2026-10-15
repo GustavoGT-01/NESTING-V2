@@ -853,7 +853,7 @@ function renderCore(){
   const R=S.res,tabs=R?Object.keys(R):[];if(R&&!R[S.tab])S.tab=tabs[0];
   $('#tabs').innerHTML=tabs.map(k=>`<button type="button" class="tab ${k===S.tab?'on':''}" data-t="${esc(k)}">${esc(k)}</button>`).join('');
   const ready=!!(R&&S.snap);$('#xLock').hidden=ready;patPreview();
-  ['xsvg','xdxf','xdwg','xall','xeps','xepsall','pdfPrev','pdfGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});
+  ['pdfPrev','pdfGo'].forEach(id=>{const el=$('#'+id);if(el)el.disabled=!ready});document.querySelectorAll('[data-x]').forEach(b=>{b.disabled=!ready});
   $('#pdfDl').disabled=!S.pdf;$('#modalDl').disabled=!S.pdf;
   const sv=S.savedNest,old=savedNestStale();$('#nestSave').disabled=!ready;$('#nestOpen').disabled=!sv||old;
   $('#nestInfo').className='msg'+(old?' w':'');$('#nestInfo').textContent=sv?'Encaixe salvo em '+whenLabel(sv.savedAt)+' · '+sv.sheets+' chapa(s).'+(old?' As peças ou chapas mudaram desde então: ele não pode mais ser aberto.':''):'Nenhum encaixe salvo neste projeto.';
@@ -1271,45 +1271,60 @@ function sheetFile(k,i,seq){const th=String(k.split(' · ')[1]||'').replace(/\s*
   return safeName((seq||sheetSeq()).get(k+'|'+i)+'-'+th+'MM-'+planLabel())}
 const safeName=s=>String(s||'encaixe').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_').replace(/^_+|_+$/g,'')||'encaixe';
 const nm=()=>safeName((($('#job').value||S.file)||'pecas')+'_'+S.tab);
-$('#xsvg').onclick=()=>{const q=sheetSeq();cur().forEach(({sh,g},i)=>dl(sheetFile(S.tab,i,q)+'.svg',sheetSVG(sh,g,true).replace('<svg ',`<svg width="${g.w}mm" height="${g.h}mm" `),'image/svg+xml'))};
-$('#xdxf').onclick=()=>{const q=sheetSeq();cur().forEach((c,i)=>dl(sheetFile(S.tab,i,q)+'.dxf',dxfSheets([c]),'text/plain'))};
-$('#xall').onclick=()=>{const th=String(S.tab.split(' · ')[1]||'').replace(/\s*mm$/,'');dl(safeName('TODAS-'+th+'MM-'+planLabel())+'.dxf',dxfSheets(cur()),'text/plain')};
-$('#xdwg').onclick=async()=>{
-  const list=cur();status('Gerando DWG…',false);
-  const q=sheetSeq();try{for(const[i,c]of list.entries()){const r=await sfetch('/api/dxf-dwg',{method:'POST',body:dxfSheets([c])});if(!r.ok){status(await r.text(),true);return}dl(sheetFile(S.tab,i,q)+'.dwg',await r.blob(),'application/acad')}
-    status(list.length+' DWG gerado(s).',false)}
-  catch(e){status(e.message,true)}};
+/* Exportação igual em todos os formatos: chapa por chapa ou todas em um arquivo (chapas empilhadas, 200 mm entre elas),
+   na aba aberta ou em todas as espessuras. */
+const xKeys=()=>$('#xScope').checked?Object.keys(S.res||{}):[S.tab];
+function allName(key,keys){const[mat,thTxt]=key.split(' · '),th=String(thTxt||'').replace(/\s*mm$/,''),dup=keys.filter(k=>String(k.split(' · ')[1])===String(thTxt)).length>1;
+  return safeName('TODAS-'+th+'MM-'+planLabel()+(dup?'-'+plain(mat):''))}
+function stacked(key){const g=S.groups[key],L=S.res[key].sheets;let oy=0;const placed=[];
+  L.forEach((sh,i)=>{for(const q of sh.placed)placed.push({...q,y:q.y+oy});oy+=g.h+(i<L.length-1?200:0)});
+  return{sh:{placed},g:{w:g.w,h:oy}}}
+const svgOf=(sh,g)=>sheetSVG(sh,g,true).replace('<svg ',`<svg width="${g.w}mm" height="${g.h}mm" `);
+async function exportAs(fmt,mode){if(!S.res||!S.tab){toast('Encaixe antes de exportar.','bad');return}
+  const keys=xKeys(),q=sheetSeq();let n=0;
+  if(fmt==='eps')return exportEps(keys,mode);
+  status('Gerando '+fmt.toUpperCase()+'…',false);
+  try{for(const key of keys){const g=S.groups[key],L=S.res[key].sheets.map(sh=>({sh,g}));
+      const files=mode==='one'?[{name:allName(key,keys),list:L,one:stacked(key)}]:L.map((c,i)=>({name:sheetFile(key,i,q),list:[c],one:c}));
+      for(const f of files){
+        if(fmt==='dxf')dl(f.name+'.dxf',dxfSheets(f.list),'text/plain');
+        else if(fmt==='svg')dl(f.name+'.svg',svgOf(f.one.sh,f.one.g),'image/svg+xml');
+        else if(fmt==='dwg'){const r=await sfetch('/api/dxf-dwg',{method:'POST',body:dxfSheets(f.list)});if(!r.ok){status(await r.text(),true);return}dl(f.name+'.dwg',await r.blob(),'application/acad')}
+        n++}}
+    hist('export',{format:fmt,mode,keys,files:n});status(n+' arquivo(s) '+fmt.toUpperCase()+' gerado(s).',false)}
+  catch(e){status(e.message,true)}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-x]');if(b)exportAs(b.dataset.x,b.dataset.xm).catch(x=>status(x.message,true))});
 renderPresets();render();
 /* ---------- exportação EPS ---------- */
 function plain(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function nameFrom(pat,ctx){return safeName(plain(pat.replace(/\{(\w+)\}/g,(_,k)=>ctx[k]==null?'':ctx[k])).replace(/\s+/g,'_').replace(/_{2,}/g,'_'))}
-function epsPlan(keys){
+function epsPlan(keys,mode){
   const q=sheetSeq(),items=[],used={};
   for(const key of keys){const[mat,thTxt]=key.split(' · '),th=thTxt.replace(' mm',''),sk=[S.projectId,mat,th].join('|');
+    if(mode==='one'){const{sh,g}=stacked(key);items.push({key,sk,n:0,name:allName(key,keys)+'.eps',mat,th,one:true,sheet:{w:g.w,h:g.h,parts:sh.placed.map(q=>({rings:q.rings.map(r=>r.map(([x,y])=>[x+q.x,y+q.y])),color:partColor(q.it)}))},parts:sh.placed.length,src:[...new Set(sh.placed.map(q=>fileName(q.it.fileId)).filter(Boolean))]});continue}
     for(const[i,sh]of S.res[key].sheets.entries()){const n=(used[sk]??(S.seq[sk]||0))+1;used[sk]=n;
       const name=sheetFile(key,i,q)+'.eps',g=S.groups[key];
       items.push({key,sk,n,name,mat,th,sheet:{w:g.w,h:g.h,parts:sh.placed.map(q=>({rings:q.rings.map(r=>r.map(([x,y])=>[x+q.x,y+q.y])),color:partColor(q.it)}))},parts:sh.placed.length,src:[...new Set(sh.placed.map(q=>fileName(q.it.fileId)).filter(Boolean))]})}}
   return items}
-async function exportEps(keys){
+async function exportEps(keys,mode){
   const p=curProj();if(!p){toast('Selecione um projeto.','bad');return}
   if(!S.res||!S.snap){toast('Encaixe antes de exportar.','bad');return}
-  const items=epsPlan(keys),pend=S.parts.filter(q=>q.on&&!q.groupId).length,guess=S.parts.filter(q=>q.on&&q.thSrc&&q.thSrc!=='manual').length,fails=keys.reduce((a,k)=>a+(S.res[k].fail||[]).length,0);
+  const items=epsPlan(keys,mode),pend=S.parts.filter(q=>q.on&&!q.groupId).length,guess=S.parts.filter(q=>q.on&&q.thSrc&&q.thSrc!=='manual').length,fails=keys.reduce((a,k)=>a+(S.res[k].fail||[]).length,0);
   const warns=[];if(pend)warns.push(pend+' peça(s) sem modelo (pendentes de classificação)');if(guess)warns.push(guess+' peça(s) com espessura não lida do arquivo (inferida do nome ou padrão)');if(fails)warns.push(fails+' peça(s) não couberam e ficarão fora dos arquivos');
-  const text=`Exportar ${items.length} arquivo(s) EPS do projeto ${p.code} (${p.product}):\n`+items.map(i=>'• '+i.name+' ('+i.parts+(i.parts===1?' peça, ':' peças, ')+i.sheet.w+'×'+i.sheet.h+' mm)').join('\n')+(warns.length?'\n\nAvisos:\n'+warns.map(w=>'• '+w).join('\n'):'')+'\n\nOs arquivos só são baixados depois de conferidos com o desenho de origem.';
+  const text=`Exportar ${items.length} arquivo(s) EPS de ${planLabel()}:\n`+items.map(i=>'• '+i.name+' ('+i.parts+(i.parts===1?' peça, ':' peças, ')+i.sheet.w+'×'+i.sheet.h+' mm)').join('\n')+(warns.length?'\n\nAvisos:\n'+warns.map(w=>'• '+w).join('\n'):'')+'\n\nOs arquivos só são baixados depois de conferidos com o desenho de origem.';
   if(!await ask(text,'Exportar',false))return;
   status('Gerando e conferindo EPS…',false);
-  let R;try{R=await api('/api/eps',{opts:{colors:$('#epsColors').checked,frame:$('#epsFrame').checked},sheets:items.map(i=>({name:i.name,title:p.code+' '+i.mat+' '+i.th+'mm',sheet:i.sheet}))})}
+  // num arquivo só, o contorno seria um retângulo em volta de todas as chapas: sai
+  let R;try{R=await api('/api/eps',{opts:{colors:$('#epsColors').checked,frame:$('#epsFrame').checked&&mode!=='one'},sheets:items.map(i=>({name:i.name,title:planLabel()+' '+i.mat+' '+i.th+'mm',sheet:i.sheet}))})}
   catch(e){status(e.message,true);hist('export.error',{format:'eps',error:e.message});return}
   const log=[];let ok=0;
   R.files.forEach((f,i)=>{const it=items[i],good=f.check.ok;
-    if(good){dl(f.name,f.eps,'application/postscript');S.seq[it.sk]=Math.max(S.seq[it.sk]||0,it.n);ok++}
+    if(good){dl(f.name,f.eps,'application/postscript');if(!it.one)S.seq[it.sk]=Math.max(S.seq[it.sk]||0,it.n);ok++}
     log.push({name:f.name,ok:good,issues:f.check.issues,bbox_mm:f.check.bbox_mm,contours:f.check.rings,max_dev_mm:f.check.max_dev_mm,material:it.mat,thickness:it.th,parts:it.parts,sources:it.src})});
   hist('export',{format:'eps',project:{code:p.code,product:p.product,lot:p.lot,order:p.order},pattern:$('#namePat').value,opts:{colors:$('#epsColors').checked,frame:$('#epsFrame').checked},preset:S.activePreset?S.activePreset.name:null,files:log,warnings:warns});
   const bad=log.filter(x=>!x.ok);
   status(bad.length?`${ok} de ${log.length} EPS gerados. Falha em: ${bad.map(b=>b.name+' ('+b.issues.join('; ')+')').join(' | ')}`:`${ok} EPS gerado(s) e conferido(s): medidas e contornos iguais ao desenho.`,!!bad.length);
   flush()}
-$('#xeps').onclick=()=>exportEps([S.tab]);
-$('#xepsall').onclick=()=>exportEps(Object.keys(S.res));
 /* Prévia do nome com o projeto e a chapa da aba aberta (sequência ilustrativa 001). */
 function patPreview(){const k=S.tab||Object.keys(S.groups)[0]||'Material · 15 mm',th=String(k.split(' · ')[1]||'').replace(/\s*mm$/,'');
   $('#patPrev').textContent=safeName('01-'+th+'MM-'+planLabel())+'.eps'}
