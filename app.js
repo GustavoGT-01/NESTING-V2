@@ -982,7 +982,17 @@ function reportModel(){
   }
   const loose=S.parts.filter(p=>p.on&&!p.groupId);
   if(loose.length) legend.push({name:'Sem conjunto',color:'#8b93a1',qty:loose.reduce((a,p)=>a+p.qty,0),names:loose.map(p=>p.name),rule:rules.mix?'Pode compartilhar a chapa':'Chapas separadas dos conjuntos nomeados'});
+  // relatório simples: produtos (cor, unidades, peças, chapas) e chapas na ordem de corte com a perda
+  const seq=sheetSeq(),pl=plans().find(p=>p.id===(curProj()||{}).plan),byP=new Map(),order=[];
+  for(const g of groups)for(const sh of g.sheets){const nn=seq.get(g.key+'|'+(sh.n-1)),names=new Set();
+    for(const q of sh.raw.placed){const pid=q.it.product||'',pn=pid?((prodIdx().find(x=>x.id===pid)||{}).name||String(q.it.name).split(' · ')[0]):'Sem produto';
+      let r=byP.get(pid);if(!r){r={id:pid,name:pn,color:partColor(q.it),pcs:0,area:0,sheets:new Set(),rank:Number.isFinite(q.it.rank)?q.it.rank:1e9,units:pid&&pl?((pl.items||[]).find(x=>x.id===pid)||{}).qty||null:null};byP.set(pid,r)}
+      r.pcs++;r.area+=q.it.A;r.sheets.add(nn);names.add(pn)}
+    order.push({nn,key:g.key,w:sh.w,h:sh.h,area:sh.area,occ:sh.occ,waste:sh.waste,loss:sh.area?sh.waste/sh.area*100:null,products:[...names],raw:sh.raw,mar:snap.opt.mar})}
+  order.sort((a,b)=>String(a.nn).localeCompare(String(b.nn)));
+  const products=[...byP.values()].sort((a,b)=>a.rank-b.rank||a.name.localeCompare(b.name,'pt-BR')).map(r=>({...r,sheets:[...r.sheets].sort()}));
   return {
+    plan:pl?pl.name:'',products,order,
     job:jobName(),when,whenLabel:when.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'}),
     preset:snap.preset&&snap.preset.name?snap.preset.name:'',
     engine:snap.engine,workers:snap.workers,iters:snap.iters||0,opt:snap.opt,askedCs:snap.askedCs,rotLabel:snap.rotLabel||'',
@@ -1085,17 +1095,20 @@ function drawSheet(sh,g,mar){
   }
   return c;
 }
+const pdfSimple=()=>$('#pdfKind').value==='simple';
+$('#pdfKind').onchange=()=>{S.pdf=null;$('#pdfDl').disabled=true;$('#modalDl').disabled=true};
+function showModel(m){if(pdfSimple()){$('#modalBody').innerHTML=simpleHtml(m);mountSimple(m)}else{$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m)}}
 function openPreview(){
-  try{const m=reportModel();$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m);showModal('modal','#modalX')}
+  try{const m=reportModel();showModel(m);showModal('modal','#modalX')}
   catch(e){status(e.message,true)}
 }
 function generatePdf(){
   try{
     const m=reportModel();
-    const bytes=modelPdf(m);
-    S.pdf={bytes,name:safeName(m.job)+'_relatorio.pdf',fingerprint:fingerprint(m)};
+    const simple=pdfSimple(),bytes=simple?simplePdf(m):modelPdf(m);
+    S.pdf={bytes,name:safeName(m.plan||m.job)+(simple?'_relatorio_simples.pdf':'_relatorio.pdf'),fingerprint:fingerprint(m)};
     $('#pdfDl').disabled=false;$('#modalDl').disabled=false;
-    if(!$('#modal').hidden){$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m)}
+    if(!$('#modal').hidden)showModel(m);
     status('PDF gerado. Já pode baixar.',false);
   }catch(e){status(e.message,true)}
 }
@@ -1687,3 +1700,36 @@ async function openPlanNest(){const pl=curPlan();if(!pl||!pl.nestAt)return;
   const mesa=curProj();if(mesa){mesa.product=pl.name;mesa.plan=pl.id;mesa.seq=pl.seq!==false;mesa.near=pl.near!==false}
   if(!openSavedNest(false)){render();autosave();return}
   render();autosave();showView('encaixe');showResult();toast('Encaixe de '+pl.name+' aberto.','ok')}
+
+/* ---------- relatório simples: produtos, cores, chapas e perda (sem peça por peça) ---------- */
+function simpleRows(m){return m.order.map(o=>[o.nn,o.key,mmxt(o.w)+' × '+mmxt(o.h),o.products.join(', '),m2txt(o.area),m2txt(o.occ),m2txt(o.waste),pctxt(o.loss)])}
+function simpleTotals(m){const by={};for(const o of m.order){const r=by[o.key]||(by[o.key]={key:o.key,n:0,area:0,occ:0});r.n++;r.area+=o.area;r.occ+=o.occ}
+  return Object.values(by).map(r=>[r.key,String(r.n),m2txt(r.area),m2txt(r.occ),m2txt(r.area-r.occ),pctxt(r.area?(r.area-r.occ)/r.area*100:null)])}
+function simpleHtml(m){const t=m.totals,loss=t.sheetArea?t.waste/t.sheetArea*100:null;
+  let h=`<div class="paper"><h2>Relatório de encaixe${m.plan?' · '+esc(m.plan):''}</h2><table><tbody>`;
+  for(const[a,b]of[['Gerado em',m.whenLabel],['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]])h+=`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`;
+  h+=`</tbody></table><h2>Produtos</h2><table><thead><tr><th>Produto</th><th>Unidades</th><th>Peças</th><th>Chapas</th></tr></thead><tbody>`;
+  for(const p of m.products)h+=`<tr><td><i class="sw" style="background:${esc(p.color)}"></i>${esc(p.name)}</td><td>${esc(p.units??'—')}</td><td>${esc(p.pcs)}</td><td>${esc(p.sheets.join(', '))}</td></tr>`;
+  h+=`</tbody></table><h2>Chapas (ordem de corte)</h2><table><thead><tr><th>Chapa</th><th>Material</th><th>Medida</th><th>Produtos</th><th>m² chapa</th><th>m² peças</th><th>Perda</th><th>Perda %</th></tr></thead><tbody>`;
+  for(const r of simpleRows(m))h+=`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
+  h+=`</tbody></table><h2>Por material</h2><table><thead><tr><th>Material</th><th>Chapas</th><th>m² chapa</th><th>m² peças</th><th>Perda</th><th>Perda %</th></tr></thead><tbody>`;
+  for(const r of simpleTotals(m))h+=`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
+  h+=`</tbody></table>`;
+  for(const o of m.order)h+=`<h2>Chapa ${esc(o.nn)} · ${esc(o.key)} · perda ${esc(pctxt(o.loss))}</h2><p>${esc(o.products.join(', '))}</p><div data-sfig="${esc(o.nn)}"></div>`;
+  return h+'</div>'}
+function mountSimple(m){for(const o of m.order){const host=document.querySelector('[data-sfig="'+CSS.escape(String(o.nn))+'"]');if(!host)continue;const c=drawSheet(o.raw,{w:o.w,h:o.h},o.mar);c.className='sheetcanvas';host.appendChild(c)}}
+function simplePdf(m){const images=[],blocks=[],push=b=>{if(Array.isArray(b))blocks.push(...b);else blocks.push(b)},t=m.totals,loss=t.sheetArea?t.waste/t.sheetArea*100:null;
+  push(paraBlock('Relatório de encaixe'+(m.plan?' · '+m.plan:''),14,'F2'));
+  push(paraBlock('Gerado em '+m.whenLabel,9,'F1'));push(gapBlock(4));
+  push(headBlock('Resumo'));
+  push(tableBlocks(['Item','Valor'],[['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]],[180,335]));
+  push(headBlock('Produtos'));
+  push(legendBlock(m.products.map(p=>({color:p.color,name:p.name,qty:p.units,names:[p.pcs+' peça(s)'],rule:'chapas '+p.sheets.join(', ')})).map(e=>e.qty==null?{...e,qty:'—'}:e)));
+  push(headBlock('Chapas (ordem de corte)'));
+  push(tableBlocks(['Chapa','Material','Medida','Produtos','m² chapa','m² peças','Perda','Perda %'],simpleRows(m),[34,78,72,126,54,54,52,45]));
+  push(headBlock('Por material'));
+  push(tableBlocks(['Material','Chapas','m² chapa','m² peças','Perda','Perda %'],simpleTotals(m),[150,50,80,80,80,75]));
+  push(paraBlock('Perda = área da chapa menos a área líquida das peças (margem, espaçamento, furos e sobra).',8,'F1'));
+  for(const o of m.order){const im=canvasJpeg(drawSheet(o.raw,{w:o.w,h:o.h},o.mar));im.idx=images.length;images.push(im);
+    push(imageBlock(im,'Chapa '+o.nn+' · '+o.key+' · perda '+pctxt(o.loss)+' · '+o.products.join(', ')))}
+  return paintPages(blocks,images,m.whenLabel)}
