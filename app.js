@@ -968,11 +968,12 @@ function reportModel(){
   if(loose.length) legend.push({name:'Sem conjunto',color:'#8b93a1',qty:loose.reduce((a,p)=>a+p.qty,0),names:loose.map(p=>p.name),rule:rules.mix?'Pode compartilhar a chapa':'Chapas separadas dos conjuntos nomeados'});
   // relatório simples: produtos (cor, unidades, peças, chapas) e chapas na ordem de corte com a perda
   const seq=sheetSeq(),pl=plans().find(p=>p.id===(curProj()||{}).plan),byP=new Map(),order=[];
-  for(const g of groups)for(const sh of g.sheets){const nn=seq.get(g.key+'|'+(sh.n-1)),names=new Set();
+  for(const g of groups)for(const sh of g.sheets){const nn=seq.get(g.key+'|'+(sh.n-1)),names=new Set(),here=new Map();
     for(const q of sh.raw.placed){const pid=q.it.product||'',pn=pid?((prodIdx().find(x=>x.id===pid)||{}).name||String(q.it.name).split(' · ')[0]):'Sem produto';
       let r=byP.get(pid);if(!r){r={id:pid,name:pn,color:partColor(q.it),pcs:0,area:0,sheets:new Set(),rank:Number.isFinite(q.it.rank)?q.it.rank:1e9,units:pid&&pl?((pl.items||[]).find(x=>x.id===pid)||{}).qty||null:null};byP.set(pid,r)}
-      r.pcs++;r.area+=q.it.A;r.sheets.add(nn);names.add(pn)}
-    order.push({nn,key:g.key,w:sh.w,h:sh.h,area:sh.area,occ:sh.occ,waste:sh.waste,loss:sh.area?sh.waste/sh.area*100:null,products:[...names],raw:sh.raw,mar:snap.opt.mar})}
+      r.pcs++;r.area+=q.it.A;r.sheets.add(nn);names.add(pn);
+      const h=here.get(pid)||here.set(pid,{name:pn,color:r.color,pcs:0,rank:r.rank}).get(pid);h.pcs++}
+    order.push({nn,key:g.key,w:sh.w,h:sh.h,area:sh.area,occ:sh.occ,waste:sh.waste,loss:sh.area?sh.waste/sh.area*100:null,products:[...names],legend:[...here.values()].sort((a,b)=>a.rank-b.rank),raw:sh.raw,mar:snap.opt.mar})}
   order.sort((a,b)=>String(a.nn).localeCompare(String(b.nn)));
   const products=[...byP.values()].sort((a,b)=>a.rank-b.rank||a.name.localeCompare(b.name,'pt-BR')).map(r=>({...r,sheets:[...r.sheets].sort()}));
   return {
@@ -1049,9 +1050,11 @@ function modelHtml(m){
     for(const p of g.parts) h+=`<tr><td><i class="sw" style="background:${esc(p.color)}"></i>${esc(p.name)}</td><td>${esc(p.qty)}</td><td>${esc(p.placed)}</td><td>${mmxt(p.w)}×${mmxt(p.h)} mm${p.holes?' · '+esc(p.holes)+' furo'+(p.holes>1?'s':''):''}</td><td>${m2txt(p.area)}</td><td>${esc(p.group)}</td></tr>`;
     h+=`</tbody></table>`;
     if(g.fail.length){h+=`<p>Fora do encaixe: ${g.fail.map(f=>esc(f.name)+' × '+f.n+' ('+(f.why==='junto'?'não coube na mesma chapa do conjunto':'não cabe na chapa')+')').join('; ')}.</p>`}
+    h+=`<div class="sgrid" style="--c:${(PER_GRID[pdfPer()]||[1])[0]}">`;   // mesmas colunas do PDF (chapas por folha)
     for(const s of g.sheets){
-      h+=`<h2>Chapa ${s.n} · ${esc(g.key)}</h2><p>${s.pcs} ${s.pcs===1?'peça':'peças'}: ${esc(s.counts.map(c=>c.name+' × '+c.n).join(', ')||'—')}</p><div data-fig="${esc(g.key)}:${s.n}"></div>`;
+      h+=`<div><h2>Chapa ${s.n} · ${esc(g.key)}</h2><p class="sheet-leg">${s.counts.map(c=>`<span><i class="sw" style="background:${esc(c.color)}"></i>${esc(c.name)} × ${esc(c.n)}</span>`).join('')||'—'}</p><div data-fig="${esc(g.key)}:${s.n}"></div></div>`;
     }
+    h+='</div>';
   }
   h+=`<p class="note">No PDF este conteúdo vai para folhas A4, com cabeçalho, rodapé e número de página. A coluna Usado só aparece com número quando o motor do servidor devolve o comprimento usado.</p></div>`;
   return h;
@@ -1081,7 +1084,7 @@ function drawSheet(sh,g,mar){
   return c;
 }
 const pdfSimple=()=>$('#pdfKind').value==='simple';
-$('#pdfKind').onchange=()=>{S.pdf=null;$('#pdfDl').disabled=true;$('#modalDl').disabled=true};
+$('#pdfKind').onchange=$('#pdfPer').onchange=()=>{S.pdf=null;$('#pdfDl').disabled=true;$('#modalDl').disabled=true};
 function showModel(m){if(pdfSimple()){$('#modalBody').innerHTML=simpleHtml(m);mountSimple(m)}else{$('#modalBody').innerHTML=modelHtml(m);mountCanvases(m)}}
 function openPreview(){
   try{const m=reportModel();showModel(m);showModal('modal','#modalX')}
@@ -1239,11 +1242,9 @@ function modelPdf(m){
     push(tableBlocks(['Chapa','Comp.','Larg.','Peças','m² chapa','m² peças','Sobra','%','Usado'],g.sheets.map(s=>[String(s.n),mmxt(s.w),mmxt(s.h),String(s.pcs),m2txt(s.area),m2txt(s.occ),m2txt(s.waste),pctxt(s.util),s.extent==null?'—':mmxt(s.extent)+' mm']),colS));
     push(tableBlocks(['Peça','Qtd','Encaix.','Medida','m² un.','Conjunto'],g.parts.map(p=>[p.name,String(p.qty),String(p.placed),mmxt(p.w)+' × '+mmxt(p.h)+(p.holes?' · '+p.holes+' furo'+(p.holes>1?'s':''):''),m2txt(p.area),p.group]),colP));
     if(g.fail.length) push(paraBlock('Fora do encaixe: '+g.fail.map(f=>f.name+' × '+f.n+' ('+(f.why==='junto'?'não coube na mesma chapa do conjunto':'não cabe na chapa')+')').join('; ')+'.',9,'F1'));
-    for(const s of g.sheets){
-      const canvas=drawSheet(s.raw,{w:s.w,h:s.h},m.opt.mar);
-      const im=canvasJpeg(canvas);im.idx=images.length;images.push(im);
-      push(imageBlock(im,'Chapa '+s.n+' · '+g.key+' · '+s.counts.map(c=>c.name+' × '+c.n).join(', ')));
-    }
+    const per=pdfPer(),cells=g.sheets.map(s=>{const im=canvasJpeg(drawSheet(s.raw,{w:s.w,h:s.h},m.opt.mar));im.idx=images.length;images.push(im);
+      return{im,title:'Chapa '+s.n+' · '+g.key,caption:'Chapa '+s.n+' · '+g.key+' · '+s.counts.map(c=>c.name+' × '+c.n).join(', '),legend:s.counts.map(c=>({color:c.color,name:c.name,pcs:c.n}))}});
+    if(per===1)cells.forEach(c=>push(imageBlock(c.im,c.caption)));else{push(gapBlock(10));push(sheetGrid(cells,per))}
   }
   push(gapBlock(8));
   push(paraBlock('Resultado: '+t.placed+' de '+t.requested+' peças em '+t.sheets+' chapa(s). Aproveitamento '+pctxt(t.util)+'. Sobra '+m2txt(t.waste)+'.',10,'F2'));
@@ -1364,7 +1365,12 @@ function showView(v,toggle){
   $('#panelToggle').setAttribute('aria-expanded',open);
   if(changed)kickView()}
 kickView();
-$('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(b)showView(b.dataset.view,true)});
+$('.rail').addEventListener('click',e=>{const b=e.target.closest('.nav[data-view]');if(!b)return;
+  // menu Produtos / Planejamento: sempre volta para a lista (tela inicial da aba)
+  const back=(b.dataset.view==='produtos'&&!!PR.id)||(b.dataset.view==='planejamento'&&!!PL.id);
+  if(b.dataset.view==='produtos'&&PR.id)openProduct(null).catch(x=>toast(x.message,'bad'));
+  if(b.dataset.view==='planejamento'&&PL.id){PL.id=null;renderPlan()}
+  showView(b.dataset.view,!back)});   // voltando para a lista: não recolhe o painel
 $('#go').addEventListener('click',()=>{if(['pecas','produtos','planejamento'].includes(mainEl.dataset.view))showView('encaixe')},true);
 $('#panelToggle').onclick=()=>showView(mainEl.dataset.view,true);
 $('#railToggle').onclick=()=>{const wide=$('.rail').offsetWidth>100;appEl.classList.toggle('rail-min',wide);appEl.classList.toggle('rail-max',!wide);
@@ -1704,30 +1710,28 @@ function simpleTotals(m){const by={};for(const o of m.order){const r=by[o.key]||
 function simpleHtml(m){const t=m.totals,loss=t.sheetArea?t.waste/t.sheetArea*100:null;
   let h=`<div class="paper"><h2>Relatório de encaixe${m.plan?' · '+esc(m.plan):''}</h2><table><tbody>`;
   for(const[a,b]of[['Gerado em',m.whenLabel],...m.pedido,['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]])h+=`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`;
-  h+=`</tbody></table><h2>Produtos</h2><table><thead><tr><th>Produto</th><th>Unidades</th><th>Peças</th><th>Chapas</th></tr></thead><tbody>`;
-  for(const p of m.products)h+=`<tr><td><i class="sw" style="background:${esc(p.color)}"></i>${esc(p.name)}</td><td>${esc(p.units??'—')}</td><td>${esc(p.pcs)}</td><td>${esc(p.sheets.join(', '))}</td></tr>`;
   h+=`</tbody></table><h2>Chapas (ordem de corte)</h2><table><thead><tr><th>Chapa</th><th>Material</th><th>Medida</th><th>Produtos</th><th>m² chapa</th><th>m² peças</th><th>Perda</th><th>Perda %</th></tr></thead><tbody>`;
   for(const r of simpleRows(m))h+=`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
   h+=`</tbody></table><h2>Por material</h2><table><thead><tr><th>Material</th><th>Chapas</th><th>m² chapa</th><th>m² peças</th><th>Perda</th><th>Perda %</th></tr></thead><tbody>`;
   for(const r of simpleTotals(m))h+=`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
   h+=`</tbody></table>`;
-  for(const o of m.order)h+=`<h2>Chapa ${esc(o.nn)} · ${esc(o.key)} · perda ${esc(pctxt(o.loss))}</h2><p>${esc(o.products.join(', '))}</p><div data-sfig="${esc(o.nn)}"></div>`;
-  return h+'</div>'}
+  const cols=(PER_GRID[pdfPer()]||[1])[0];h+=`<div class="sgrid" style="--c:${cols}">`;
+  for(const o of m.order)h+=`<div><h2>Chapa ${esc(o.nn)} · ${esc(o.key)} · perda ${esc(pctxt(o.loss))}</h2><p class="sheet-leg">${o.legend.map(l=>`<span><i class="sw" style="background:${esc(l.color)}"></i>${esc(l.name)} · ${esc(l.pcs)} peça(s)</span>`).join('')}</p><div data-sfig="${esc(o.nn)}"></div></div>`;
+  return h+'</div></div>'}
 function mountSimple(m){for(const o of m.order){const host=document.querySelector('[data-sfig="'+CSS.escape(String(o.nn))+'"]');if(!host)continue;const c=drawSheet(o.raw,{w:o.w,h:o.h},o.mar);c.className='sheetcanvas';host.appendChild(c)}}
 function simplePdf(m){const images=[],blocks=[],push=b=>{if(Array.isArray(b))blocks.push(...b);else blocks.push(b)},t=m.totals,loss=t.sheetArea?t.waste/t.sheetArea*100:null;
   push(paraBlock('Relatório de encaixe'+(m.plan?' · '+m.plan:''),14,'F2'));
   push(paraBlock('Gerado em '+m.whenLabel,9,'F1'));push(gapBlock(4));
   push(headBlock('Resumo'));
   push(tableBlocks(['Item','Valor'],[...m.pedido,['Chapas',String(t.sheets)],['Área das chapas',m2txt(t.sheetArea)],['Área das peças',m2txt(t.occ)],['Perda',m2txt(t.waste)+' ('+pctxt(loss)+')'],['Aproveitamento',pctxt(t.util)]],[180,335]));
-  push(headBlock('Produtos'));
-  push(legendBlock(m.products.map(p=>({color:p.color,name:p.name,qty:p.units,names:[p.pcs+' peça(s)'],rule:'chapas '+p.sheets.join(', ')})).map(e=>e.qty==null?{...e,qty:'—'}:e)));
   push(headBlock('Chapas (ordem de corte)'));
   push(tableBlocks(['Chapa','Material','Medida','Produtos','m² chapa','m² peças','Perda','Perda %'],simpleRows(m),[34,78,72,126,54,54,52,45]));
   push(headBlock('Por material'));
   push(tableBlocks(['Material','Chapas','m² chapa','m² peças','Perda','Perda %'],simpleTotals(m),[150,50,80,80,80,75]));
   push(paraBlock('Perda = área da chapa menos a área líquida das peças (margem, espaçamento, furos e sobra).',8,'F1'));
-  for(const o of m.order){const im=canvasJpeg(drawSheet(o.raw,{w:o.w,h:o.h},o.mar));im.idx=images.length;images.push(im);
-    push(imageBlock(im,'Chapa '+o.nn+' · '+o.key+' · perda '+pctxt(o.loss)+' · '+o.products.join(', ')))}
+  const per=pdfPer(),cells=m.order.map(o=>{const im=canvasJpeg(drawSheet(o.raw,{w:o.w,h:o.h},o.mar));im.idx=images.length;images.push(im);
+    return{o,im,title:'Chapa '+o.nn+' · '+o.key+' · perda '+pctxt(o.loss),legend:o.legend}});
+  if(per===1)cells.forEach(c=>push(sheetLegend(c.o,c.im)));else{push(gapBlock(10));push(sheetGrid(cells,per))}
   return paintPages(blocks,images,m.whenLabel)}
 
 /* Módulos opcionais: Usinagem CNC (cam.py + sim.js) e Etiquetas com QR (etiquetas.js) só aparecem quando ativos. */
@@ -1778,4 +1782,29 @@ async function dupProduct(){if(!PR.id)return;await prodFlush();const d=PR.doc,id
 /* Produto e peça de uma peça do encaixe: o nome é "Produto · peça", mas o produto também pode ter "·". */
 function prodPiece(it){const full=String(it.name||''),pn=it.product?((prodIdx().find(x=>x.id===it.product)||{}).name||''):'';
   if(pn&&full.startsWith(pn+' · '))return{prod:pn,piece:full.slice(pn.length+3)};return{prod:pn,piece:full}}
+/* Chapa do relatório simples: título, legenda só com os produtos desta chapa (cor, nome, peças nela) e o desenho,
+   tudo num bloco só (não se separam entre páginas). */
+function sheetLegend(o,im){const rowH=12,cols=2,legH=Math.ceil(o.legend.length/cols)*rowH+6,head=16,title='Chapa '+o.nn+' · '+o.key+' · perda '+pctxt(o.loss);
+  const maxH=PH-MT-MB-30-head-legH;let dw=CW,dh=im.h*(CW/im.w);if(dh>maxH){dh=maxH;dw=im.w*(dh/im.h)}
+  return{h:head+legH+dh+8,draw(top){let s='0.1 0.1 0.1 rg\n'+T(ML,top-11,title,9,'F2');
+    o.legend.forEach((l,i)=>{const cx=ML+(i%cols)*(CW/cols),y=top-head-10-Math.floor(i/cols)*rowH,rgb=hexRgb(l.color);
+      s+=rgb.map(v=>v.toFixed(3)).join(' ')+' rg\n'+cx.toFixed(2)+' '+(y-1).toFixed(2)+' 8 8 re f\n0.12 0.11 0.1 rg\n'+T(cx+12,y,clipText(l.name+' · '+l.pcs+' peça(s)',CW/cols-16,8),8,'F1')});
+    const y=top-head-legH-dh,x=ML+(CW-dw)/2;return s+`q ${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im${im.idx} Do Q\n`}}}
 
+/* Várias chapas por folha (2, 4, 6 ou 12): grade de células com título, legenda e desenho; letra menor quanto mais chapas. */
+const PER_GRID={1:[1,1],2:[1,2],4:[2,2],6:[2,3],12:[3,4]};
+/* Automático: o máximo de chapas por folha que ainda fica legível. Legendas longas (muitas peças ou produtos
+   numa chapa) pedem célula maior: no máximo 6 por folha. */
+function pdfPer(){const v=$('#pdfPer').value;if(v!=='auto')return PER_GRID[+v]?+v:1;
+  const L=[];for(const k in S.res||{})for(const sh of S.res[k].sheets)L.push(new Set(sh.placed.map(q=>pdfSimple()?(q.it.product||q.it.name):q.it.id)).size);
+  const n=L.length,leg=Math.max(0,...L);if(n<=1)return 1;if(n<=2)return 2;if(n<=4)return 4;if(n<=6||leg>3)return 6;return 12}
+function sheetGrid(cells,per){const[cols,rows]=PER_GRID[per],pageH=PH-MT-MB-1,cw=CW/cols,ch=pageH/rows,fs=per>=12?6:per>=6?7:8,blocks=[];
+  for(let i=0;i<cells.length;i+=cols){const row=cells.slice(i,i+cols);   // uma linha por bloco: preenche a folha atual antes de abrir outra
+    blocks.push({h:ch,draw(top){let o='';row.forEach((c,k)=>{o+=gridCell(c,ML+k*cw,top,cw-10,ch-10,fs)});return o}})}
+  return blocks}
+function gridCell(c,x,top,w,h,fs){const rowH=fs+3,maxRows=Math.max(1,Math.floor(h*0.28/rowH)),L=c.legend||[],show=L.length>maxRows?L.slice(0,maxRows-1):L;
+  let o='0.1 0.1 0.1 rg\n'+T(x,top-fs-1,clipText(c.title,w,fs+1),fs+1,'F2');let y=top-fs-4-rowH;
+  show.forEach(l=>{const rgb=hexRgb(l.color);o+=rgb.map(v=>v.toFixed(3)).join(' ')+' rg\n'+x.toFixed(2)+' '+(y-1).toFixed(2)+' '+(fs-1)+' '+(fs-1)+' re f\n0.12 0.11 0.1 rg\n'+T(x+fs+3,y,clipText(l.name+' · '+l.pcs+' peça(s)',w-fs-3,fs),fs,'F1');y-=rowH});
+  if(show.length<L.length){o+='0.4 0.4 0.4 rg\n'+T(x,y,'+'+(L.length-show.length)+' outro(s)',fs,'F1');y-=rowH}
+  const ih=y-(top-h)-2,im=c.im;let dw=w,dh=im.h*(w/im.w);if(dh>ih){dh=ih;dw=im.w*(dh/im.h)}
+  return o+`q ${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${(x+(w-dw)/2).toFixed(2)} ${(y-dh+rowH-4).toFixed(2)} cm /Im${im.idx} Do Q\n`}

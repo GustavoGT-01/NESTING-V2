@@ -209,6 +209,8 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .st{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:650;background:color-mix(in srgb,var(--stc) 18%,transparent);color:var(--stc)}
 .st-planejado{--stc:var(--mu)}.st-encaixado{--stc:var(--ac)}.st-em_corte{--stc:var(--warn)}.st-cortado{--stc:var(--ok)}.st-entregue{--stc:var(--alt)}.st-atrasado{--stc:var(--bad)}
 .psum-hd .st-row{display:flex;flex-direction:row;gap:6px;flex-wrap:wrap}
+.sgrid{display:grid;grid-template-columns:repeat(var(--c),minmax(0,1fr));gap:12px}.sgrid h2{font-size:13px}.sgrid .sheet-leg{font-size:11px}
+.sheet-leg{display:flex;flex-wrap:wrap;gap:6px 16px;margin:4px 0 8px}.sheet-leg span{display:inline-flex;align-items:center}
 .cut-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}.cut-list label{font-size:13px}
 .cut-bar{height:6px;border-radius:99px;background:var(--sf3);overflow:hidden}.cut-bar i{display:block;height:100%;background:var(--ok)}
 .plan-def{color:var(--mu);font-size:12px;line-height:1.5}
@@ -509,6 +511,7 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <div class="xcard">
       <div class="xcard-hd"><b>Relatório</b><span>PDF com chapas e lista de peças</span></div>
       <label class="f">Tipo<select id="pdfKind"><option value="full">Detalhado: peça por peça</option><option value="simple">Simples: produtos, chapas e perdas</option></select></label>
+      <label class="f">Chapas por folha<select id="pdfPer"><option value="auto" selected>Automático (o máximo por folha, legível)</option><option value="1">1 por folha</option><option value="2">2 por folha</option><option value="4">4 por folha</option><option value="6">6 por folha</option><option value="12">12 por folha</option></select></label>
       <div class="btns"><button type="button" id="pdfPrev" disabled>Prévia</button><button type="button" class="pri" id="pdfGo" disabled>Gerar PDF</button><button type="button" id="pdfDl" disabled>Baixar</button></div>
     </div>
   
