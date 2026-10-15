@@ -103,6 +103,8 @@ input[type=color]{width:34px;height:34px;padding:3px;flex:0 0 auto;cursor:pointe
 .setcard .flags{display:grid;grid-template-columns:1fr 1fr;gap:6px}.setcard .flags label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mu);cursor:pointer}
 .pair{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;padding:6px 6px 6px 10px}
 .preset-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto}
+.net{display:flex;flex-direction:column;gap:var(--s3);border-top:1px solid var(--ln);padding-top:var(--s4);margin-top:var(--s2)}
+.net-info{display:grid;gap:6px;font-size:13px;color:var(--mu)}.net-info b{color:var(--tx);font-size:20px;letter-spacing:.25em;font-variant-numeric:tabular-nums}.net-info code{color:var(--ac);font-size:14px;user-select:all}
 .preset-item{flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:9px 12px;background:var(--sf);text-align:left}
 .preset-item.on,.preset-item.on:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--sf))}.preset-item span{font-size:12.5px;color:var(--mu);font-weight:400}
 .top .tag{margin:0;align-self:flex-start}.top .tag{align-self:center}.tag.on{color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent);border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
@@ -425,6 +427,11 @@ main.view-in .empty,main.view-in .board-empty{animation:fade .22s var(--ease)}
     <div class="preset-list" id="presetList"></div>
     <div class="btns"><button type="button" id="presetSave">Salvar</button><button type="button" id="presetApply" disabled>Aplicar</button><button type="button" id="presetUpdate" disabled>Atualizar</button><button type="button" id="presetDup" disabled>Duplicar</button><button type="button" id="presetDel" disabled>Excluir</button></div>
     <div class="msg">Os presets ficam gravados no servidor, na pasta data/.</div><div class="msg" id="pmsg"></div>
+    <div class="net" id="net" hidden><header class="sh"><h2>Acesso pela rede</h2></header>
+      <label class="f chk"><input type="checkbox" id="netOn"> Outros computadores e celulares do mesmo Wi-Fi podem usar o programa, com PIN</label>
+      <div class="net-info" id="netInfo"></div>
+      <div class="btns"><button type="button" id="netPin">Gerar PIN novo</button></div>
+      <div class="msg" id="netMsg"></div></div>
   
   </div></section>
 </aside>

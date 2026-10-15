@@ -52,6 +52,18 @@ cargo build --release
 
 O servidor encontra o executável sozinho em `motor/target/release/` e avisa no início qual motor está em uso. Os dois motores dão exatamente as mesmas posições para a mesma ordem de peças; a diferença é quantas ordens cada um consegue testar no prazo.
 
+## Instalador para Windows
+
+`installer\build.ps1` gera `installer\out\EncaixeChapa-Setup-<versão>.exe`, que já leva a janela do programa (Electron), o Python portátil (python.org) e o motor Rust compilado. O programa abre na própria janela, sem console nem navegador: ela liga o servidor escondido e o desliga ao fechar (`desktop/main.js`). Quem instala não precisa de Python nem de Rust, nem de permissão de administrador: o programa vai para `%LOCALAPPDATA%\Programs\EncaixeChapa` e os dados para `%LOCALAPPDATA%\EncaixeChapa\data`, que a desinstalação não apaga.
+
+O ODA File Converter não vai dentro do instalador, porque a licença dele não permite redistribuir. Se ele não estiver instalado, o instalador oferece baixá-lo do canal oficial (winget, ou a página da ODA quando não há winget).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 2.0.0
+```
+
+Para gerar é preciso ter o Inno Setup 6 (`winget install JRSoftware.InnoSetup`), o Rust e o Node.js (o `npx` baixa o Electron).
+
 ## Como usar
 
 1. Crie um projeto em **Novo projeto**.
@@ -91,6 +103,8 @@ A gravação é atômica e mantém uma cópia `.bak`. Um arquivo corrompido é p
 ## Segurança
 
 O servidor só atende em `127.0.0.1` e só serve a página (`/` e `/index.html`) e a API. Ele recusa pedidos com `Host` diferente de `127.0.0.1:8080`/`localhost:8080` e gravações vindas de outros sites (cabeçalho `Origin`), o que impede uma página aberta no navegador de ler ou apagar os projetos. Abra sempre por `http://127.0.0.1:8080`. Só um servidor pode usar a porta: um segundo `iniciar.bat` avisa e fecha.
+
+**Acesso pela rede** (Presets › Acesso pela rede, desligado por padrão). Ligado, o servidor passa a atender a rede local na próxima vez que abrir. Outros computadores e celulares do mesmo Wi-Fi entram por `http://<IP do computador>:8080` e precisam do PIN de 6 dígitos mostrado no computador principal. O PIN abre uma sessão de 30 dias por cookie `HttpOnly`/`SameSite=Strict`; 5 PINs errados bloqueiam aquele IP por 5 minutos; gerar um PIN novo derruba todas as sessões. O PIN e a chave liga/desliga só aparecem no próprio computador (`/api/rede` recusa pedidos da rede). A configuração fica em `data/rede.json`. É HTTP sem criptografia: use só em rede de confiança. Na primeira vez, o Windows pergunta se libera o programa no firewall.
 
 ## Testes
 

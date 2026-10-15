@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import json
 import logging
 import multiprocessing
@@ -10,11 +12,15 @@ import shutil
 import socket
 import subprocess
 import sys
+import secrets
 import tempfile
+import threading
+import time
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ProcessPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import engine
 import eps
@@ -30,6 +36,101 @@ CSP = (
 )
 WORKERS = max(1, int(os.environ.get("NEST_WORKERS", "0") or 0) or (os.cpu_count() or 1))
 POOL = None
+
+# Acesso pela rede (data/rede.json). Fora da máquina tudo exige o PIN; a própria máquina entra direto.
+NET_ON = False          # estado em uso: só muda ao religar o servidor (é ele que escolhe a interface)
+SESSIONS: dict = {}     # cookie -> validade
+FAILS: dict = {}        # IP -> [erros, bloqueado até]
+NET_LOCK = threading.RLock()
+SESSION_DAYS = 30
+COOKIE = "nest_s"
+LOGIN_PAGE = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Encaixe Chapa</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f14;color:#f1f5f9;font:16px system-ui,sans-serif}
+form{background:#151d27;border:1px solid #283444;border-radius:14px;padding:28px;width:min(320px,calc(100vw - 32px));box-sizing:border-box;display:grid;gap:14px}
+h1{font-size:20px;margin:0}p{margin:0;color:#9aa9ba;font-size:14px}input{font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:10px;border-radius:10px;border:1px solid #3a4a60;background:#0d131b;color:inherit}
+button{font:inherit;font-weight:600;padding:11px;border:0;border-radius:10px;background:#38bdf8;color:#04121c;cursor:pointer}.e{color:#f87171}</style></head>
+<body><form method="post" action="/api/login"><h1>Encaixe Chapa</h1><p>Digite o PIN mostrado no computador principal, em Presets &rsaquo; Acesso pela rede.</p>
+%s<input name="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required autofocus aria-label="PIN"><button>Entrar</button></form></body></html>"""
+
+
+def _net_path() -> Path:
+    return store.data_dir() / "rede.json"
+
+
+def net_config() -> dict:
+    """{"on": bool, "pin": "6 dígitos"}; cria com PIN aleatório na primeira leitura."""
+    with NET_LOCK:
+        try:
+            cfg = json.loads(_net_path().read_text(encoding="utf-8"))
+            if isinstance(cfg, dict) and isinstance(cfg.get("pin"), str) and cfg["pin"].isdigit() and len(cfg["pin"]) >= 6:
+                return {"on": cfg.get("on") is True, "pin": cfg["pin"]}
+        except (OSError, ValueError):
+            pass
+        cfg = {"on": False, "pin": "%06d" % secrets.randbelow(10**6)}
+        _net_path().parent.mkdir(parents=True, exist_ok=True)
+        store.atomic_write(_net_path(), json.dumps(cfg))
+        return cfg
+
+
+def net_save(on=None, new_pin: bool = False) -> dict:
+    with NET_LOCK:
+        cfg = net_config()
+        if on is not None:
+            cfg["on"] = bool(on)
+        if new_pin:
+            cfg["pin"] = "%06d" % secrets.randbelow(10**6)
+            SESSIONS.clear()  # PIN novo derruba quem entrou com o antigo
+        store.atomic_write(_net_path(), json.dumps(cfg))
+    return cfg
+
+
+def lan_addresses() -> list:
+    try:
+        infos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+    except OSError:
+        return []
+    return sorted({i[4][0] for i in infos if not i[4][0].startswith(("127.", "169.254."))})
+
+
+def check_pin(ip: str, pin: str, now: float | None = None) -> str | None:
+    """Token de sessão se o PIN confere; None se errado ou IP bloqueado (5 erros = 5 minutos parado)."""
+    now = time.time() if now is None else now
+    with NET_LOCK:
+        real = net_config()["pin"]
+        count, until = FAILS.get(ip, [0, 0.0])
+        if until > now:
+            return None
+        if not hmac.compare_digest(pin.encode("utf-8"), real.encode("utf-8")):
+            count += 1
+            FAILS[ip] = [0, now + 300] if count >= 5 else [count, 0.0]
+            return None
+        FAILS.pop(ip, None)
+        for tok in [t for t, exp in SESSIONS.items() if exp < now]:
+            del SESSIONS[tok]
+        if len(SESSIONS) >= 200:  # teto: descarta a sessão mais antiga
+            del SESSIONS[min(SESSIONS, key=SESSIONS.get)]
+        token = secrets.token_urlsafe(32)
+        SESSIONS[token] = now + SESSION_DAYS * 86400
+        return token
+
+
+def session_ok(cookie_header: str | None) -> bool:
+    for part in (cookie_header or "").split(";"):
+        name, _, value = part.strip().partition("=")
+        if name == COOKIE and value:
+            with NET_LOCK:
+                exp = SESSIONS.get(value)
+            return exp is not None and exp > time.time()
+    return False
+
+
+def ip_host(host: str, port: int) -> bool:
+    """Host "IPv4:porta": um IP literal não sofre DNS rebinding, por isso pode vir da rede."""
+    name, _, p = host.rpartition(":")
+    try:
+        return p == str(port) and ipaddress.ip_address(name).version == 4
+    except ValueError:
+        return False
 
 
 def find_oda() -> str | None:
@@ -128,7 +229,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Referrer-Policy", "same-origin")  # no-referrer faz o form de PIN mandar Origin: null
         self.send_header("Content-Security-Policy", CSP)
         super().end_headers()
 
@@ -139,10 +240,39 @@ class Handler(SimpleHTTPRequestHandler):
     def _host_ok(self) -> bool:
         # Host estranho = outro site apontando um domínio para 127.0.0.1 (DNS rebinding)
         host = self.headers.get("Host")
-        if host is None or host in self._local():
+        if host is None or host in self._local() or (NET_ON and ip_host(host, self.server.server_address[1])):
             return True
         self._fail(421, "Host não aceito.")
         return False
+
+    def _remote(self) -> bool:
+        try:
+            return not ipaddress.ip_address(self.client_address[0]).is_loopback
+        except ValueError:
+            return True
+
+    def _auth_ok(self) -> bool:
+        """Quem vem da rede precisa da sessão aberta com o PIN; sem ela, a página de entrada."""
+        if not self._remote():
+            return True
+        if not NET_ON:
+            self._fail(403, "Acesso pela rede desligado.")
+            return False
+        if session_ok(self.headers.get("Cookie")):
+            return True
+        if self.command == "GET" and self.path.split("?", 1)[0] in ("/", "/index.html"):
+            self._login_page("")
+        else:
+            self._fail(401, "Entre com o PIN.")
+        return False
+
+    def _login_page(self, error: str) -> None:
+        raw = (LOGIN_PAGE % ('<p class="e">%s</p>' % error if error else "")).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
 
     def _static(self) -> bool:
         # só a página é servida; dados, código e .git ficam de fora
@@ -156,7 +286,7 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def do_HEAD(self):
-        if self._host_ok() and self._static():
+        if self._host_ok() and self._auth_ok() and self._static():
             super().do_HEAD()
 
     def _json(self, obj, status: int = 200) -> None:
@@ -171,9 +301,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
-        if not self._host_ok():
+        if not self._host_ok() or not self._auth_ok():
             return
         path = self.path.split("?", 1)[0]
+        if path == "/api/rede":
+            if self._remote():
+                return self._fail(403, "Só no computador principal.")
+            cfg = net_config()
+            return self._json({"on": cfg["on"], "pin": cfg["pin"], "active": NET_ON,
+                               "urls": ["http://%s:%d" % (a, self.server.server_address[1]) for a in lan_addresses()]})
         if path == "/api/store":
             try:
                 return self._json(store.load())
@@ -235,9 +371,34 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._host_ok():
             return
         origin = self.headers.get("Origin")
-        if origin is not None and origin not in {"http://" + h for h in self._local()}:
-            return self._fail(403, "Origem não aceita.")  # outro site postando no servidor local
+        allowed = {"http://" + h for h in self._local()} | {"http://" + (self.headers.get("Host") or "")}
+        if origin is not None and origin not in allowed:
+            return self._fail(403, "Origem não aceita.")  # outro site postando no servidor
         path = self.path.split("?", 1)[0]
+        if path == "/api/login":
+            if not (self._remote() and NET_ON):
+                return self._fail(403, "Acesso pela rede desligado.")
+            pin = (parse_qs(data.decode("utf-8", "replace")).get("pin") or [""])[0].strip()
+            token = check_pin(self.client_address[0], pin)
+            if token is None:
+                return self._login_page("PIN errado. Depois de 5 erros, espere 5 minutos.")
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.send_header("Set-Cookie", "%s=%s; Path=/; HttpOnly; SameSite=Strict; Max-Age=%d" % (COOKIE, token, SESSION_DAYS * 86400))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if not self._auth_ok():
+            return
+        if path == "/api/rede":
+            if self._remote():
+                return self._fail(403, "Só no computador principal.")
+            try:
+                body = json.loads(data.decode("utf-8") or "{}")
+                cfg = net_save(body["on"] if isinstance(body.get("on"), bool) else None, body.get("newpin") is True)
+            except (ValueError, AttributeError, OSError) as exc:
+                return self._fail(400, "Falha ao gravar: %s" % exc)
+            return self._json({"on": cfg["on"], "pin": cfg["pin"], "active": NET_ON})
         if path == "/api/dwg":
             name = self.headers.get("X-Filename", "peca.dwg")
             try:
@@ -369,10 +530,11 @@ class Server(ThreadingHTTPServer):
 
 
 def main() -> None:
-    global POOL
+    global POOL, NET_ON
     os.chdir(ROOT)
+    NET_ON = net_config()["on"]
     try:
-        server = Server((HOST, PORT), Handler)
+        server = Server(("0.0.0.0" if NET_ON else HOST, PORT), Handler)
     except OSError:
         print(f"Já existe um servidor na porta {PORT}: use a janela aberta ou feche-a")
         sys.exit(1)
@@ -383,6 +545,8 @@ def main() -> None:
     POOL =ProcessPoolExecutor(max_workers=WORKERS)
     print(f"Encaixe: {WORKERS} núcleos do processador em uso.")
     print(f"Aberto em http://{HOST}:{PORT}")
+    if NET_ON:
+        print("Acesso pela rede ligado (com PIN): " + ", ".join("http://%s:%d" % (a, PORT) for a in lan_addresses()))
     print("Motor de encaixe: compilado (Rust)." if engine.find_motor() else "Motor de encaixe: Python (o compilado não foi encontrado).")
     if find_oda():
         print("DWG: conversor encontrado.")

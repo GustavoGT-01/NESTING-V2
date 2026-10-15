@@ -1,0 +1,9 @@
+{
+  "name": "encaixe-chapa",
+  "productName": "Encaixe Chapa",
+  "version": "2.0.0",
+  "description": "Encaixe de peças em chapa",
+  "author": "Encaixe Chapa",
+  "main": "main.js",
+  "private": true
+}

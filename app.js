@@ -534,6 +534,14 @@ const presetKey=p=>p.mat+' · '+(+p.th)+' mm';
 const presetLine=p=>(p.mat?presetKey(p)+' · chapa '+(+p.w)+'×'+(+p.h)+' mm · espaço '+(+p.gap)+' · margem '+(+p.mar)+' · ':'')+whenLabel(p.savedAt);
 function fillPresetFields(p){$('#presetName').value=p.name;$('#presetMat').value=p.mat||'';$('#presetTh').value=p.th||'';$('#presetW').value=p.w||'';$('#presetH').value=p.h||''}
 /* Campos vazios começam com a chapa da aba aberta, para salvar o que está na tela. */
+/* Acesso pela rede: só o computador principal vê o PIN (o servidor recusa /api/rede vindo de fora). */
+function renderNet(n){
+  $('#net').hidden=false;$('#netOn').checked=n.on;$('#netPin').disabled=!n.on;
+  $('#netInfo').innerHTML=n.on?(n.active?`<span>PIN</span><b>${esc(n.pin)}</b><span>Nos outros aparelhos, abra no navegador:</span>${(n.urls||[]).map(u=>`<code>${esc(u)}</code>`).join('')||'<span>Nenhum endereço de rede encontrado neste computador.</span>'}`:'<span>Feche e abra o programa para ligar o acesso.</span>'):'';
+  $('#netMsg').textContent=!n.on&&n.active?'Feche e abra o programa para desligar o acesso.':''}
+async function loadNet(){try{const n=await api('/api/rede');S.net=n;renderNet(n)}catch(e){$('#net').hidden=true}}
+$('#netOn').onchange=async e=>{try{const n=await api('/api/rede',{on:e.target.checked});S.net={...S.net,...n};renderNet(S.net)}catch(x){toast(x.message,'bad');loadNet()}};
+$('#netPin').onclick=async()=>{if(!await ask('Gerar um PIN novo? Os aparelhos que já entraram vão precisar do PIN novo.','Gerar PIN'))return;try{const n=await api('/api/rede',{newpin:true});S.net={...S.net,...n};renderNet(S.net)}catch(x){toast(x.message,'bad')}};
 function prefillPreset(){
   if(['presetMat','presetTh','presetW','presetH'].some(id=>$('#'+id).value))return;
   const k=S.tab&&S.groups[S.tab]?S.tab:Object.keys(S.groups)[0];if(!k)return;
@@ -1327,7 +1335,7 @@ function showView(v,toggle){
   const changed=mainEl.dataset.view!==v;
   const bd=v==='projetos'?$('#pboard'):v==='pecas'?$('#board'):null;
   if(bd&&changed){bd.classList.add('enter');clearTimeout(bd._t);bd._t=setTimeout(()=>bd.classList.remove('enter'),900)}
-  if(v==='presets')prefillPreset();
+  if(v==='presets'){prefillPreset();loadNet()}
   const same=mainEl.dataset.view===v&&!mainEl.classList.contains('nopanel');
   mainEl.dataset.view=v;mainEl.classList.toggle('nopanel',!!toggle&&same);
   const open=!mainEl.classList.contains('nopanel');
