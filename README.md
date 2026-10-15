@@ -21,7 +21,7 @@ Roda no seu computador, sem instalar bibliotecas: o servidor usa só a bibliotec
 
 ## Como rodar
 
-Requisitos: **Python 3.10 ou mais novo**. Para ler e gravar **DWG**, é preciso ter o [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter) instalado; DXF e SVG funcionam sem ele.
+Requisitos: **Python 3.10 ou mais novo**. **DWG** é lido e gravado pelo conversor próprio `tools/dwgconv` (C#, ACadSharp, licença MIT; compile com `dotnet build -c Release` na pasta, .NET SDK 10). Ele lê DWG do R14 ao 2018+ e grava DWG 2004. O [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter), se estiver instalado, vira reserva: é usado para gravar DWG e quando o conversor próprio não consegue ler (DWG anterior ao R14). DXF e SVG não dependem de nenhum dos dois.
 
 No Windows, dê dois cliques em `iniciar.bat`. Ele liga o servidor e abre a página no navegador.
 
@@ -39,7 +39,8 @@ Depois abra http://127.0.0.1:8080. O programa funciona enquanto o servidor estiv
 |---|---|
 | `NEST_DATA` | Pasta onde os dados são gravados (padrão: `data/`) |
 | `NEST_WORKERS` | Número de núcleos usados no encaixe (padrão: todos) |
-| `ODA_FILE_CONVERTER` | Caminho do ODA File Converter, se não estiver no local padrão |
+| `ODA_FILE_CONVERTER` | Caminho do ODA File Converter (opcional, reserva), se não estiver no local padrão |
+| `NEST_DWGCONV` | Caminho do conversor DWG próprio, se não estiver ao lado do programa nem em `tools/dwgconv/bin/Release` |
 | `NEST_MOTOR` | Caminho do motor compilado, se não estiver em `motor/target/release/` |
 
 ## Motor compilado (opcional, recomendado)
@@ -75,7 +76,7 @@ Origem X0 Y0 no canto inferior esquerdo da chapa; Z0 no topo da chapa ou na mesa
 
 `installer\build.ps1` gera `installer\out\EncaixeChapa-Setup-<versão>.exe`, que já leva a janela do programa (Electron), o Python portátil (python.org) e o motor Rust compilado. O programa abre na própria janela, sem console nem navegador: ela liga o servidor escondido e o desliga ao fechar (`desktop/main.js`). Quem instala não precisa de Python nem de Rust, nem de permissão de administrador: o programa vai para `%LOCALAPPDATA%\Programs\EncaixeChapa` e os dados para `%LOCALAPPDATA%\EncaixeChapa\data`, que a desinstalação não apaga.
 
-O ODA File Converter não vai dentro do instalador, porque a licença dele não permite redistribuir. Se ele não estiver instalado, o instalador oferece baixá-lo do canal oficial (winget, ou a página da ODA quando não há winget).
+O instalador já leva o conversor DWG próprio (`dwgconv.exe`, compilado em arquivo único, sem precisar do .NET no cliente). O ODA não é mais necessário nem oferecido; se o cliente já o tiver, o programa usa como reserva.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 2.0.0
@@ -160,7 +161,7 @@ Lê os projetos gravados em `data/` (sem alterar nada), roda o encaixe e mostra,
 - **O EPS ainda não foi testado em máquina de corte**, nem no CorelDRAW ou Ghostscript.
 - **Eixo Y do EPS.** A origem segue a tela (canto superior esquerdo). Confirme o que a sua máquina espera antes de cortar.
 - **Curvas viram retas.** Arcos e círculos são convertidos em polilinhas, e o EPS sai só com segmentos de reta.
-- **Entidades de DXF não lidas:** INSERT (blocos) e POLYLINE antiga. O programa avisa e pede confirmação antes de importar; no CAD, exploda os blocos. SPLINE e ELLIPSE são lidas e convertidas em polilinha.
+- **Entidades de DXF não lidas:** INSERT (blocos). O programa avisa e pede confirmação antes de importar; no CAD, exploda os blocos. POLYLINE antiga (2D, com arcos), SPLINE e ELLIPSE são lidas e convertidas em polilinha.
 - **Uma janela por vez.** Com duas abas abertas, a segunda recebe conflito e para de gravar.
 - **Modelos e cores são compartilhados** entre todos os projetos.
 - Peças idênticas dentro do mesmo arquivo viram quantidade; entre arquivos diferentes nunca se fundem.

@@ -19,3 +19,7 @@ graphify-out/
 installer/build/
 installer/out/
 installer/icone.ico
+
+# conversor DWG (build do .NET)
+tools/dwgconv/bin/
+tools/dwgconv/obj/

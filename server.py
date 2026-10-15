@@ -172,14 +172,38 @@ def find_oda() -> str | None:
     return shutil.which("ODAFileConverter.exe") or shutil.which("dwg2dxf")
 
 
-def dxf_to_dwg(text: str) -> bytes:
-    tool = find_oda()
+def find_dwgconv() -> str | None:
+    """Conversor DWG/DXF próprio (tools/dwgconv, ACadSharp): ao lado do programa ou na pasta de build."""
+    env = os.environ.get("NEST_DWGCONV", "").strip()
+    for c in (env, ROOT / "dwgconv.exe", ROOT / "tools" / "dwgconv" / "bin" / "Release" / "net10.0" / "dwgconv.exe"):
+        if c and Path(c).is_file():
+            return str(c)
+    return None
+
+
+def _dwgconv(cmd: str, src: Path, dst: Path, *extra: str) -> None:
+    tool = find_dwgconv()
     if not tool:
-        raise RuntimeError(
-            "Exportar DWG precisa do ODA File Converter nesta máquina."
-        )
-    if Path(tool).name.lower().startswith("dwg2dxf"):
-        raise RuntimeError("O conversor instalado só lê DWG. Exportar DWG pede o ODA File Converter.")
+        raise RuntimeError("conversor DWG não encontrado")
+    done = subprocess.run([tool, cmd, str(src), str(dst), *extra], capture_output=True, timeout=120)
+    if done.returncode != 0 or not dst.is_file():
+        raise RuntimeError((done.stderr or b"").decode("utf-8", errors="replace").strip() or "falha no conversor DWG")
+
+
+def dxf_to_dwg(text: str) -> bytes:
+    """Grava DWG: o ODA, se estiver instalado (grava qualquer versão sem pedir recuperação no AutoCAD);
+    senão o conversor próprio, em DWG 2004."""
+    tool = find_oda()
+    if not tool or Path(tool).name.lower().startswith("dwg2dxf"):
+        if not find_dwgconv():
+            raise RuntimeError("Exportar DWG precisa do conversor DWG do programa (dwgconv) ou do ODA File Converter.")
+        work = Path(tempfile.mkdtemp(prefix="nest-dxf-"))
+        try:
+            (work / "encaixe.dxf").write_bytes(text.replace("\r\n", "\n").encode("utf-8"))   # sem CR duplicado (DXF com CRLF)
+            _dwgconv("to-dwg", work / "encaixe.dxf", work / "encaixe.dwg", "AC1018")
+            return (work / "encaixe.dwg").read_bytes()
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
     in_dir = Path(tempfile.mkdtemp(prefix="nest-dxf-in-"))
     out_dir = Path(tempfile.mkdtemp(prefix="nest-dxf-out-"))
     try:
@@ -204,11 +228,24 @@ def dxf_to_dwg(text: str) -> bytes:
 
 
 def dwg_to_dxf(data: bytes, filename: str) -> str:
+    """Lê DWG: primeiro o conversor próprio (ACadSharp, R14 a 2018+); se ele falhar e o ODA estiver
+    instalado, o ODA (lê também DWG anterior ao R14)."""
+    err = ""
+    if find_dwgconv():
+        work = Path(tempfile.mkdtemp(prefix="nest-dwg-"))
+        try:
+            (work / "peca.dwg").write_bytes(data)
+            _dwgconv("to-dxf", work / "peca.dwg", work / "peca.dxf")
+            return (work / "peca.dxf").read_text(encoding="utf-8", errors="replace")
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            err = str(exc)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
     tool = find_oda()
     if not tool:
         raise RuntimeError(
-            "DWG precisa do ODA File Converter nesta máquina. "
-            "Instale o conversor gratuito da Open Design Alliance e tente de novo."
+            ("Não foi possível ler este DWG (%s). " % err if err else "Leitura de DWG indisponível: falta o conversor DWG do programa. ")
+            + "Salve como DXF no CAD, ou instale o ODA File Converter, que lê versões mais antigas."
         )
     safe = Path(filename).name or "peca.dwg"
     if not safe.lower().endswith(".dwg"):
@@ -602,10 +639,8 @@ def main() -> None:
     if NET_ON:
         print("Acesso pela rede ligado (com PIN): " + ", ".join("http://%s:%d" % (a, PORT) for a in lan_addresses()))
     print("Motor de encaixe: compilado (Rust)." if engine.find_motor() else "Motor de encaixe: Python (o compilado não foi encontrado).")
-    if find_oda():
-        print("DWG: conversor encontrado.")
-    else:
-        print("DWG: ODA File Converter não encontrado. DXF e SVG seguem normais.")
+    print("DWG: conversor próprio" + (" + ODA como reserva." if find_oda() else ".") if find_dwgconv()
+          else ("DWG: ODA File Converter." if find_oda() else "DWG: nenhum conversor encontrado. DXF e SVG seguem normais."))
     server.serve_forever()
 
 

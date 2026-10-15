@@ -49,7 +49,15 @@ function parseDXF(txt,unitSel){
       if(pts.length<2){geo[t]=(geo[t]||0)+1;continue}lay[lay_]=(lay[lay_]||0)+1;
       const end=pts[pts.length-1],cl=(t==='SPLINE'&&(g(70)&1)===1)||Math.hypot(pts[0][0]-end[0],pts[0][1]-end[1])<1e-6;
       if(cl){if(Math.hypot(pts[0][0]-end[0],pts[0][1]-end[1])<1e-6)pts.pop();pts.lay=lay_;closed.push(pts)}else for(let k=0;k<pts.length-1;k++)sg(pts[k],pts[k+1])}
-    else if(['INSERT','POLYLINE'].includes(t))geo[t]=(geo[t]||0)+1;
+    else if(t==='POLYLINE'){const fl=g(70),v=[];   // polilinha antiga: vértices em entidades VERTEX até o SEQEND
+      while(i<G.length&&G[i][0]===0&&G[i][1]==='VERTEX'){let j=i+1,x=0,y=0,b=0,vf=0;
+        while(j<G.length&&G[j][0]!==0){const[c,val]=G[j];if(c===10)x=+val;else if(c===20)y=+val;else if(c===42)b=+val;else if(c===70)vf=+val;j++}
+        i=j;if(!(vf&16))v.push({p:[x,y],b})}
+      if(i<G.length&&G[i][0]===0&&G[i][1]==='SEQEND'){i++;while(i<G.length&&G[i][0]!==0)i++}
+      if(fl&(16|64)||v.length<2){geo[t]=(geo[t]||0)+1;continue}   // malha 3D/poliface: fora
+      const cl=(fl&1)===1,pts=[],n=v.length;for(let k=0;k<(cl?n:n-1);k++){const sg2=bulgePts(v[k].p,v[(k+1)%n].p,v[k].b);pts.push(...(k?sg2.slice(1):sg2))}
+      lay[lay_]=(lay[lay_]||0)+1;if(cl){pts.pop();pts.lay=lay_;closed.push(pts)}else for(let k=0;k<pts.length-1;k++)sg(pts[k],pts[k+1])}
+    else if(t==='INSERT')geo[t]=(geo[t]||0)+1;
     else if(['TEXT','MTEXT','DIMENSION','HATCH','POINT'].includes(t))skipped++;
   }
   const sc=r=>Object.assign(r.map(p=>[p[0]*scale,p[1]*scale]),{lay:r.lay});
@@ -218,7 +226,7 @@ $('#impOk').onclick=async()=>{
   const use=IMP.rows.filter(r=>r.include&&!r.err);
   const bad=use.find(r=>!(r.th>0)||!r.mat.trim());if(bad){toast('Informe material e espessura válidos em '+bad.name+'.','bad');return}
   const part=use.filter(r=>r.geo);
-  if(part.length&&!await ask('Parte do desenho não foi lida e as peças podem sair incompletas (sem um furo ou um contorno):\n'+part.map(r=>'• '+r.name+': '+r.geo).join('\n')+'\n\nNo CAD, exploda os blocos (INSERT) e converta POLYLINE 3D em polilinhas antes de exportar o DXF. Importar mesmo assim?','Importar mesmo assim',true))return;
+  if(part.length&&!await ask('Parte do desenho não foi lida e as peças podem sair incompletas (sem um furo ou um contorno):\n'+part.map(r=>'• '+r.name+': '+r.geo).join('\n')+'\n\nNo CAD, exploda os blocos (INSERT) antes de exportar o DXF. Importar mesmo assim?','Importar mesmo assim',true))return;
   if(!IMP)return;
   if(IMP_TARGET==='product'){prodCommit(use,part);return}
   const done=[];

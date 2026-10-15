@@ -1,5 +1,5 @@
 # Gera installer\out\EncaixeChapa-Setup-<versao>.exe
-# Requisitos so na maquina de quem gera: Inno Setup 6, Rust (cargo) e Node.js (npx, para o Electron).
+# Requisitos so na maquina de quem gera: Inno Setup 6, Rust (cargo), Node.js (npx, para o Electron) e .NET SDK 10 (conversor DWG).
 # Uso: powershell -ExecutionPolicy Bypass -File installer\build.ps1 [-Version 2.0.0]
 param([string]$Version = "2.0.0", [string]$PythonVersion = "3.13.16", [string]$ElectronVersion = "44.7.2")
 $ErrorActionPreference = "Stop"
@@ -24,6 +24,15 @@ foreach ($f in "server.py", "store.py", "engine.py", "nest.py", "eps.py", "index
     Copy-Item (Join-Path $root $f) $srv
 }
 Copy-Item (Join-Path $root "motor\target\release\motor.exe") $srv
+
+# conversor DWG proprio (ACadSharp): exe unico, sem precisar do .NET no cliente
+$dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
+if (-not $dotnet) { $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe" }
+& $dotnet publish (Join-Path $root "tools\dwgconv") -c Release -r win-x64 --self-contained true `
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+    -o (Join-Path $build "dwgconv")
+if ($LASTEXITCODE -ne 0) { throw "O conversor DWG nao compilou." }
+Copy-Item (Join-Path $build "dwgconv\dwgconv.exe") $srv
 
 # 3) Python portatil oficial (python.org), guardado em cache
 $zip = Join-Path $build "python-$PythonVersion-embed-amd64.zip"
